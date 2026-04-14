@@ -2,34 +2,12 @@ name: Studio Docker Build
 
 on:
   push:
-    tags:
-      - 'v*'           # publish on every version tag, e.g. v1.0.0
-  workflow_dispatch:
-    inputs:
-      platforms:
-        description: 'Target platform(s)'
-        required: true
-        default: 'linux/amd64'
-        type: choice
-        options:
-          - linux/amd64
-          - linux/arm64
-          - linux/amd64,linux/arm64
-      runner:
-        description: 'Runner type'
-        required: true
-        default: 'ubuntu-latest-4-cores'
-        type: choice
-        options:
-          - ubuntu-latest-4-cores
-          - ubuntu-latest-8-cores
-          - ubuntu-latest-16-cores
-          - ubuntu-latest
-          - self-hosted
+    branches:
+      - master
 
 # Cancel old builds on new commit for same workflow + branch/PR
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -39,7 +17,7 @@ permissions:
 jobs:
   build:
     name: 'Studio Docker Build'
-    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     steps:
       - name: Free disk space
         run: |
@@ -68,9 +46,7 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/supabase-studio-multi-head
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
+            type=raw,value=latest
             type=sha,prefix=sha-,format=short
 
       - name: Build and push
@@ -79,7 +55,7 @@ jobs:
           context: .
           file: apps/studio/Dockerfile
           target: production
-          platforms: ${{ inputs.platforms || 'linux/amd64' }}
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
