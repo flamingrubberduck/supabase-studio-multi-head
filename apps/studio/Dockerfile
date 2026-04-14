@@ -61,8 +61,9 @@ COPY --from=builder /app/apps/studio/.next/standalone ./
 COPY --from=builder /app/apps/studio/.next/static ./apps/studio/.next/static
 
 # Docker CLI — required for multi-head stack orchestration (spawning new projects).
-# Copies just the static docker binary; no daemon, no extra packages.
+# Copies the static docker binary and the Compose plugin (needed for `docker compose`).
 COPY --from=docker:27-cli /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=docker:27-cli /usr/local/lib/docker/cli-plugins/docker-compose /usr/local/lib/docker/cli-plugins/docker-compose
 
 # Bake the Supabase compose template + init volumes into the image so Studio can
 # spawn new project stacks without requiring a host-mounted docker/ directory.
