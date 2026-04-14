@@ -1,0 +1,43 @@
+# Multi-head Studio overlay
+#
+# Replaces the standard Supabase Studio service with the multi-head build,
+# which lets you create and manage multiple isolated Supabase projects from
+# a single Dashboard.
+#
+# Usage (run from the docker/ directory, alongside docker-compose.yml):
+#
+#   docker compose -f docker-compose.yml -f docker-compose.multihead.yml up -d
+#
+# Required additions to your .env file:
+#
+#   MULTI_HEAD_IMAGE=ghcr.io/<owner>/supabase-studio-multi-head:latest
+#   MULTI_HEAD_HOST=host.docker.internal   # or the Docker bridge IP on Linux
+#   STUDIO_DATA_DIR=/path/on/host/studio-data   # persisted project registry
+#
+# The Docker socket is mounted read-write so Studio can launch child stacks.
+# On Linux you may need to add the node user to the docker group, or run:
+#   DOCKER_SOCKET_LOCATION=/var/run/docker.sock
+# (already present in the base .env.example).
+
+services:
+  studio:
+    image: ${MULTI_HEAD_IMAGE:-ghcr.io/flamingrubberduck/supabase-studio-multi-head:latest}
+    volumes:
+      # Docker socket — required so Studio can spawn new project stacks
+      - ${DOCKER_SOCKET_LOCATION:-/var/run/docker.sock}:/var/run/docker.sock:rw,z
+      # Persistent storage for project registry (projects.json)
+      - ${STUDIO_DATA_DIR:-./volumes/studio-data}:/app/studio-data:Z
+      # Optional: override the baked-in compose template at runtime
+      # - /your/custom/docker-compose.yml:${SUPABASE_COMPOSE_FILE:-/app/supabase-docker/docker-compose.yml}:ro
+    environment:
+      # Multi-head specific
+      # SUPABASE_COMPOSE_FILE defaults to /app/supabase-docker/docker-compose.yml (baked into the image)
+      STUDIO_DATA_DIR: /app/studio-data
+      # Hostname other Docker stacks are reachable at from inside this container.
+      # Use "host.docker.internal" on Mac/Windows Docker Desktop.
+      # On Linux set this to the Docker bridge IP (e.g. 172.17.0.1) or
+      # add --add-host=host.docker.internal:host-gateway to the container.
+      MULTI_HEAD_HOST: ${MULTI_HEAD_HOST:-host.docker.internal}
+      # Supavisor pooler settings for the default project (used for connection strings)
+      POOLER_TENANT_ID: ${POOLER_TENANT_ID}
+      POOLER_PROXY_PORT_TRANSACTION: ${POOLER_PROXY_PORT_TRANSACTION:-6543}

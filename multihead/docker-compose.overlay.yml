@@ -1,0 +1,75 @@
+# Multi-Head Studio overlay — for EXISTING Supabase self-hosted deployments
+#
+# This file overlays on top of an existing Supabase docker-compose.yml.
+# It replaces the standard Studio service with the multi-head build.
+# All other services (Postgres, Auth, Storage, Kong, etc.) are untouched.
+# Your existing data is preserved.
+#
+# ── Usage ────────────────────────────────────────────────────────────────────
+#
+#   1. Copy this file into your existing Supabase docker/ directory.
+#
+#   2. Add these variables to your existing .env:
+#
+#        MULTI_HEAD_IMAGE=ghcr.io/<owner>/supabase-studio-multi-head:latest
+#        MULTI_HEAD_HOST=host.docker.internal   # Linux: use bridge IP (see below)
+#        STUDIO_DATA_DIR=./volumes/studio-data
+#
+#      On Linux, find your Docker bridge IP:
+#        docker network inspect bridge --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}'
+#      Then set:  MULTI_HEAD_HOST=172.17.0.1  (or whatever it reports)
+#
+#   3. Apply — replaces Studio only, everything else keeps running:
+#
+#        docker compose -f docker-compose.yml -f docker-compose.overlay.yml up -d studio
+#
+#   4. To go back to standard Studio at any time:
+#
+#        docker compose up -d studio   # without the overlay, restores original image
+#
+# ── Automated setup ──────────────────────────────────────────────────────────
+#
+#   From the multihead/ folder of the supabase-studio-multi-head repo:
+#
+#     bash integrate.sh /path/to/your/existing/supabase/docker
+#
+# ── Registering additional external Supabase stacks ─────────────────────────
+#
+#   If you have *other* Supabase deployments running on different ports that you
+#   want multi-head Studio to manage, see the "Importing external stacks" section
+#   in multihead/README.md.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  studio:
+    image: ${MULTI_HEAD_IMAGE:-ghcr.io/flamingrubberduck/supabase-studio-multi-head:latest}
+    # Remove the standard healthcheck path and use the multi-head one
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})"
+        ]
+      timeout: 10s
+      interval: 5s
+      retries: 3
+    volumes:
+      # Docker socket — lets Studio spawn new project stacks
+      - ${DOCKER_SOCKET_LOCATION:-/var/run/docker.sock}:/var/run/docker.sock:rw,z
+      # Project registry — survives restarts and image upgrades
+      - ${STUDIO_DATA_DIR:-./volumes/studio-data}:/app/studio-data:Z
+    environment:
+      STUDIO_DATA_DIR: /app/studio-data
+      # Hostname at which extra Docker stacks are reachable from inside this container.
+      # Mac/Windows Docker Desktop: host.docker.internal  (works automatically)
+      # Linux: set to your Docker bridge IP, e.g. 172.17.0.1
+      MULTI_HEAD_HOST: ${MULTI_HEAD_HOST:-host.docker.internal}
+      # Pooler settings for the default project connection strings
+      POOLER_TENANT_ID: ${POOLER_TENANT_ID:-}
+      POOLER_PROXY_PORT_TRANSACTION: ${POOLER_PROXY_PORT_TRANSACTION:-6543}
+      # The compose template used to create new projects is baked into the image.
+      # Override only if you want to use a custom template:
+      # SUPABASE_COMPOSE_FILE: /path/to/your/docker-compose.yml

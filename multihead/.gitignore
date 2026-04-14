@@ -1,0 +1,7 @@
+# Runtime data — created on first launch, must not be committed
+volumes/db/data/
+volumes/storage/
+volumes/studio-data/
+
+# Generated env file — commit .env.example, not .env
+.env
