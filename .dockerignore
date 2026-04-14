@@ -4,6 +4,9 @@
 .github
 about
 docker
+# Un-ignore the compose template baked into the Studio image
+!docker/docker-compose.yml
+!docker/volumes
 examples
 i18n
 **/node_modules
