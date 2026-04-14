@@ -54,6 +54,14 @@ FROM dev AS builder
 
 RUN pnpm --filter studio exec next build
 
+# Locate the Docker Compose plugin — its path varies across docker:cli versions.
+# Copy it to a fixed location so the production COPY below always works.
+FROM docker:27-cli AS docker-tools
+RUN set -e; \
+    plugin=$(find /usr -name docker-compose -type f 2>/dev/null | head -1); \
+    [ -n "$plugin" ] || { echo "ERROR: docker-compose not found in docker:27-cli"; exit 1; }; \
+    cp "$plugin" /docker-compose
+
 # Copy only compiled code and dependencies
 FROM base AS production
 COPY --from=builder /app/apps/studio/public ./apps/studio/public
@@ -61,9 +69,8 @@ COPY --from=builder /app/apps/studio/.next/standalone ./
 COPY --from=builder /app/apps/studio/.next/static ./apps/studio/.next/static
 
 # Docker CLI — required for multi-head stack orchestration (spawning new projects).
-# Copies the static docker binary and the Compose plugin (needed for `docker compose`).
 COPY --from=docker:27-cli /usr/local/bin/docker /usr/local/bin/docker
-COPY --from=docker:27-cli /usr/local/lib/docker/cli-plugins/docker-compose /usr/local/lib/docker/cli-plugins/docker-compose
+COPY --from=docker-tools /docker-compose /usr/local/lib/docker/cli-plugins/docker-compose
 
 # Bake the Supabase compose template + init volumes into the image so Studio can
 # spawn new project stacks without requiring a host-mounted docker/ directory.
