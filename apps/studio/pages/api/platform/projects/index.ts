@@ -31,12 +31,26 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 }
 
-const handleGetAll = async (_req: NextApiRequest, res: NextApiResponse) => {
-  const projects = getStoredProjects()
-  // Strip sensitive fields from the list response
-  return res.status(200).json(
-    projects.map(({ db_password, anon_key, service_key, jwt_secret, ...rest }) => rest)
-  )
+const handleGetAll = async (req: NextApiRequest, res: NextApiResponse) => {
+  const { limit = '100', offset = '0', search } = req.query
+
+  let projects = getStoredProjects()
+
+  if (search && typeof search === 'string' && search.length > 0) {
+    const q = search.toLowerCase()
+    projects = projects.filter((p) => p.name.toLowerCase().includes(q))
+  }
+
+  const total = projects.length
+  const pageLimit = Number(limit)
+  const pageOffset = Number(offset)
+  const paged = projects.slice(pageOffset, pageOffset + pageLimit)
+
+  // Return paginated format expected by useProjectsInfiniteQuery (ListProjectsPaginatedResponse)
+  return res.status(200).json({
+    pagination: { count: total, limit: pageLimit, offset: pageOffset },
+    projects: paged.map(({ db_password, anon_key, service_key, jwt_secret, ...rest }) => rest),
+  })
 }
 
 const handleCreate = async (req: NextApiRequest, res: NextApiResponse) => {

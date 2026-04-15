@@ -70,7 +70,7 @@ export const useProjectsInfiniteQuery = <TData = ProjectsInfiniteData>(
       const page = pages.length
       const currentTotalCount = page * limit
       // @ts-ignore [Joshen] API type issue for Version 2 endpoints
-      const totalCount = lastPage.pagination.count
+      const totalCount = (lastPage as any)?.pagination?.count ?? 0
 
       if (currentTotalCount >= totalCount) return undefined
       return page

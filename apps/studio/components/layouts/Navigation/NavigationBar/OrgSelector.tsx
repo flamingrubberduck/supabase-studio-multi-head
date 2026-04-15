@@ -45,7 +45,7 @@ export function OrgSelector() {
     { enabled: Boolean(slug) && !isPlatformOrg }
   )
 
-  const numProjects = projects?.pages[0]?.pagination.count
+  const numProjects = projects?.pages[0]?.pagination?.count
   const projectsLabel = isPlatformOrg
     ? 'Platform'
     : typeof numProjects === 'number'
