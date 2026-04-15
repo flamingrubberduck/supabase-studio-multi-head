@@ -257,8 +257,32 @@ export function prepareMultiHeadComposeFile(): string {
     transformed.splice(volIdx + 1, 0, '  db-data:')
   }
 
+  // 5. In the kong service, replace depends_on: studio with depends_on: analytics.
+  //    The default compose has kong wait for studio (service_healthy) which creates a
+  //    4-level health chain (db→analytics→studio→kong). In Docker Compose v2+ detached
+  //    mode this can leave kong stuck in Created state. Kong only needs the API services
+  //    to be ready — analytics being healthy is sufficient and much faster.
+  let inKong = false
+  let inKongDependsOn = false
+  const final = transformed.map((line) => {
+    if (/^  kong:/.test(line)) {
+      inKong = true
+      inKongDependsOn = false
+    } else if (/^  [a-zA-Z]/.test(line)) {
+      inKong = false
+      inKongDependsOn = false
+    }
+    if (inKong && /^\s+depends_on:\s*$/.test(line)) inKongDependsOn = true
+    else if (inKong && inKongDependsOn && !/^\s{6}/.test(line)) inKongDependsOn = false
+
+    if (inKong && inKongDependsOn && /^\s+studio:\s*$/.test(line)) {
+      return line.replace('studio:', 'analytics:')
+    }
+    return line
+  })
+
   fs.mkdirSync(DATA_DIR, { recursive: true })
-  fs.writeFileSync(MULTI_HEAD_COMPOSE_FILE, transformed.join('\n'), 'utf-8')
+  fs.writeFileSync(MULTI_HEAD_COMPOSE_FILE, final.join('\n'), 'utf-8')
   return MULTI_HEAD_COMPOSE_FILE
 }
 
