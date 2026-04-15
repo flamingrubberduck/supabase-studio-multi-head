@@ -35,7 +35,7 @@ import {
 } from '@/lib/constants'
 import { formatCurrency } from '@/lib/helpers'
 
-const stripePromise = loadStripe(STRIPE_PUBLIC_KEY)
+const stripePromise = STRIPE_PUBLIC_KEY ? loadStripe(STRIPE_PUBLIC_KEY) : Promise.resolve(null)
 
 const PLAN_HEADINGS = {
   tier_pro:

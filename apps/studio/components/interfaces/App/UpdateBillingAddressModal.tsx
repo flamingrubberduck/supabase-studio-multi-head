@@ -33,7 +33,7 @@ import { useAsyncCheckPermissions } from '@/hooks/misc/useCheckPermissions'
 import { useSelectedOrganizationQuery } from '@/hooks/misc/useSelectedOrganization'
 import { IS_PLATFORM, STRIPE_PUBLIC_KEY } from '@/lib/constants'
 
-const stripePromise = loadStripe(STRIPE_PUBLIC_KEY)
+const stripePromise = STRIPE_PUBLIC_KEY ? loadStripe(STRIPE_PUBLIC_KEY) : Promise.resolve(null)
 
 export function UpdateBillingAddressModal() {
   const queryClient = useQueryClient()

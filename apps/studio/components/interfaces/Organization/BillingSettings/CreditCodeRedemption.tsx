@@ -169,25 +169,27 @@ export const CreditCodeRedemption = ({
       )}
 
       <DialogContent size="medium" onInteractOutside={(e) => e.preventDefault()}>
-        <HCaptcha
-          ref={captchaRef}
-          sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY!}
-          size="invisible"
-          onOpen={() => {
-            // [Joshen] This is to ensure that hCaptcha popup remains clickable
-            if (document !== undefined) document.body.classList.add('!pointer-events-auto')
-          }}
-          onClose={() => {
-            if (document !== undefined) document.body.classList.remove('!pointer-events-auto')
-          }}
-          onVerify={(token) => {
-            captchaTokenRef.current = token
-            if (document !== undefined) document.body.classList.remove('!pointer-events-auto')
-          }}
-          onExpire={() => {
-            captchaTokenRef.current = null
-          }}
-        />
+        {process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY && (
+          <HCaptcha
+            ref={captchaRef}
+            sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY}
+            size="invisible"
+            onOpen={() => {
+              // [Joshen] This is to ensure that hCaptcha popup remains clickable
+              if (document !== undefined) document.body.classList.add('!pointer-events-auto')
+            }}
+            onClose={() => {
+              if (document !== undefined) document.body.classList.remove('!pointer-events-auto')
+            }}
+            onVerify={(token) => {
+              captchaTokenRef.current = token
+              if (document !== undefined) document.body.classList.remove('!pointer-events-auto')
+            }}
+            onExpire={() => {
+              captchaTokenRef.current = null
+            }}
+          />
+        )}
 
         {!!codeRedemptionResult ? (
           <div className="p-8">

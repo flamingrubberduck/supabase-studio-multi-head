@@ -42,7 +42,7 @@ import { subscriptionKeys } from '@/data/subscriptions/keys'
 import { useAsyncCheckPermissions } from '@/hooks/misc/useCheckPermissions'
 import { STRIPE_PUBLIC_KEY } from '@/lib/constants'
 
-const stripePromise = loadStripe(STRIPE_PUBLIC_KEY)
+const stripePromise = STRIPE_PUBLIC_KEY ? loadStripe(STRIPE_PUBLIC_KEY) : Promise.resolve(null)
 
 const FORM_ID = 'credit-top-up'
 
@@ -214,25 +214,27 @@ export const CreditTopUp = ({ slug }: { slug: string | undefined }) => {
       </DialogTrigger>
 
       <DialogContent onInteractOutside={(e) => e.preventDefault()}>
-        <HCaptcha
-          ref={captchaRefCallback}
-          sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY!}
-          size="invisible"
-          onOpen={() => {
-            // [Joshen] This is to ensure that hCaptcha popup remains clickable
-            if (document !== undefined) document.body.classList.add('!pointer-events-auto')
-          }}
-          onClose={() => {
-            if (document !== undefined) document.body.classList.remove('!pointer-events-auto')
-          }}
-          onVerify={(token) => {
-            setCaptchaToken(token)
-            if (document !== undefined) document.body.classList.remove('!pointer-events-auto')
-          }}
-          onExpire={() => {
-            setCaptchaToken(null)
-          }}
-        />
+        {process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY && (
+          <HCaptcha
+            ref={captchaRefCallback}
+            sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY}
+            size="invisible"
+            onOpen={() => {
+              // [Joshen] This is to ensure that hCaptcha popup remains clickable
+              if (document !== undefined) document.body.classList.add('!pointer-events-auto')
+            }}
+            onClose={() => {
+              if (document !== undefined) document.body.classList.remove('!pointer-events-auto')
+            }}
+            onVerify={(token) => {
+              setCaptchaToken(token)
+              if (document !== undefined) document.body.classList.remove('!pointer-events-auto')
+            }}
+            onExpire={() => {
+              setCaptchaToken(null)
+            }}
+          />
+        )}
         <DialogHeader>
           <DialogTitle>Top Up Credits</DialogTitle>
           <DialogDescription className="space-y-2">
