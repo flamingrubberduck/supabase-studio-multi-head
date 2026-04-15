@@ -61,8 +61,18 @@ services:
       - ${DOCKER_SOCKET_LOCATION:-/var/run/docker.sock}:/var/run/docker.sock:rw,z
       # Project registry — survives restarts and image upgrades
       - ${STUDIO_DATA_DIR:-./volumes/studio-data}:/app/studio-data:Z
+      # SQL snippet storage
+      - ./volumes/snippets:/app/snippets:Z
+      # Edge function source files
+      - ./volumes/functions:/app/edge-functions:Z
     environment:
       STUDIO_DATA_DIR: /app/studio-data
+      # Host-side absolute path of the studio-data bind mount. The orchestrator
+      # uses this to write init files that the host Docker daemon can resolve as
+      # bind-mount sources when spawning new project stacks.
+      # Set automatically by start.sh; for manual setup run:
+      #   echo "HOST_STUDIO_DATA_DIR=$(realpath ./volumes/studio-data)" >> .env
+      HOST_STUDIO_DATA_DIR: ${HOST_STUDIO_DATA_DIR:-}
       # Hostname at which extra Docker stacks are reachable from inside this container.
       # Mac/Windows Docker Desktop: host.docker.internal  (works automatically)
       # Linux: set to your Docker bridge IP, e.g. 172.17.0.1
@@ -70,6 +80,8 @@ services:
       # Pooler settings for the default project connection strings
       POOLER_TENANT_ID: ${POOLER_TENANT_ID:-}
       POOLER_PROXY_PORT_TRANSACTION: ${POOLER_PROXY_PORT_TRANSACTION:-6543}
+      SNIPPETS_MANAGEMENT_FOLDER: /app/snippets
+      EDGE_FUNCTIONS_MANAGEMENT_FOLDER: /app/edge-functions
       # The compose template used to create new projects is baked into the image.
       # Override only if you want to use a custom template:
       # SUPABASE_COMPOSE_FILE: /path/to/your/docker-compose.yml
