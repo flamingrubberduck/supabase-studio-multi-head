@@ -45,7 +45,7 @@ import { SetupIntentResponse } from '@/data/stripe/setup-intent-mutation'
 import { useConfirmPendingSubscriptionCreateMutation } from '@/data/subscriptions/org-subscription-confirm-pending-create'
 import { useIsFeatureEnabled } from '@/hooks/misc/useIsFeatureEnabled'
 import { useLocalStorageQuery } from '@/hooks/misc/useLocalStorage'
-import { PRICING_TIER_LABELS_ORG, STRIPE_PUBLIC_KEY } from '@/lib/constants'
+import { IS_PLATFORM, PRICING_TIER_LABELS_ORG, STRIPE_PUBLIC_KEY } from '@/lib/constants'
 import { useProfile } from '@/lib/profile'
 
 const ORG_KIND_TYPES = {
@@ -457,7 +457,7 @@ export const NewOrgForm = ({
               </Panel.Content>
             )}
 
-            {isBillingEnabled && (
+            {isBillingEnabled && IS_PLATFORM && (
               <Panel.Content>
                 <FormField_Shadcn_
                   control={form.control}
