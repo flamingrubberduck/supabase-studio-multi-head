@@ -30,6 +30,14 @@ import { spawnSync } from 'node:child_process'
 const DATA_DIR = process.env.STUDIO_DATA_DIR || path.join(process.cwd(), '.studio-data')
 const STACKS_DIR = path.join(DATA_DIR, 'stacks')
 
+/**
+ * Absolute host-side path of the studio-data directory.
+ * Must match the host bind-mount source for /app/studio-data in the Studio container.
+ * Set via HOST_STUDIO_DATA_DIR env var (written by start.sh / integrate.sh).
+ * Falls back to DATA_DIR for native (non-Docker) runs where both paths are identical.
+ */
+const HOST_DATA_DIR = process.env.HOST_STUDIO_DATA_DIR || DATA_DIR
+
 /** docker-compose.yml used as a template for new stacks */
 const SOURCE_COMPOSE_FILE =
   process.env.SUPABASE_COMPOSE_FILE ||
@@ -181,6 +189,29 @@ export function allocateNextPorts(usedKongPorts: number[]): PortAllocation {
 // ────────────────────────────────────────────────────────────
 
 /**
+ * Copies the volumes/ directory from the baked-in compose template into the
+ * host-mounted studio-data directory so the host Docker daemon can bind-mount
+ * individual files (SQL init scripts, kong.yml, vector.yml, etc.) into new
+ * project containers.
+ *
+ * Background: bind-mount source paths in the generated compose file are resolved
+ * on the HOST by the Docker daemon. Files that only exist inside the Studio
+ * container are invisible to the daemon, which auto-creates empty directories in
+ * their place — breaking every init script and config file mount.
+ *
+ * Returns the HOST-SIDE absolute path to the copied volumes/ directory.
+ */
+function exportVolumesToHost(sourceDir: string): string {
+  const srcVolumes = path.join(sourceDir, 'volumes')
+  const dstVolumes = path.join(DATA_DIR, 'supabase-docker', 'volumes')
+
+  fs.mkdirSync(dstVolumes, { recursive: true })
+  fs.cpSync(srcVolumes, dstVolumes, { recursive: true, force: true })
+
+  return path.join(HOST_DATA_DIR, 'supabase-docker', 'volumes').replace(/\\/g, '/')
+}
+
+/**
  * Generates (or refreshes) a multi-head-compatible docker-compose.yml in DATA_DIR.
  *
  * Transformations applied to the source compose file:
@@ -188,8 +219,8 @@ export function allocateNextPorts(usedKongPorts: number[]): PortAllocation {
  *     as <project>-<service>-<index>, so multiple stacks can coexist.
  *  2. The ./volumes/db/data bind mount is replaced with a named volume "db-data",
  *     which Docker Compose automatically scopes to the project (e.g. supabase-abc123_db-data).
- *  3. All remaining ./volumes/ references are made absolute, pointing to the
- *     source docker/ directory so all stacks share the read-only init scripts.
+ *  3. All remaining ./volumes/ references are rewritten to the host-accessible copy
+ *     exported by exportVolumesToHost(), so the Docker daemon can resolve them.
  *  4. "db-data:" is appended to the top-level volumes: section.
  *
  * Returns the path to the generated file.
@@ -203,7 +234,7 @@ export function prepareMultiHeadComposeFile(): string {
   }
 
   const sourceDir = path.dirname(path.resolve(SOURCE_COMPOSE_FILE))
-  const absVolumesDir = path.join(sourceDir, 'volumes').replace(/\\/g, '/')
+  const absVolumesDir = exportVolumesToHost(sourceDir)
 
   const lines = fs.readFileSync(SOURCE_COMPOSE_FILE, 'utf-8').split('\n')
 
