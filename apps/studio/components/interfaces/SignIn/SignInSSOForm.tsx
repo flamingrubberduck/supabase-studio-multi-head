@@ -93,19 +93,21 @@ export const SignInSSOForm = () => {
           )}
         />
 
-        <div className="self-center">
-          <HCaptcha
-            ref={captchaRef}
-            sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY!}
-            size="invisible"
-            onVerify={(token) => {
-              setCaptchaToken(token)
-            }}
-            onExpire={() => {
-              setCaptchaToken(null)
-            }}
-          />
-        </div>
+        {process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY && (
+          <div className="self-center">
+            <HCaptcha
+              ref={captchaRef}
+              sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY}
+              size="invisible"
+              onVerify={(token) => {
+                setCaptchaToken(token)
+              }}
+              onExpire={() => {
+                setCaptchaToken(null)
+              }}
+            />
+          </div>
+        )}
 
         <Button block form={formId} htmlType="submit" size="large" loading={isSubmitting}>
           Sign in

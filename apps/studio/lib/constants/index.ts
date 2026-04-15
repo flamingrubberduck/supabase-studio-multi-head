@@ -40,8 +40,7 @@ export const GOTRUE_ERRORS = {
   UNVERIFIED_GITHUB_USER: 'Error sending confirmation mail',
 }
 
-export const STRIPE_PUBLIC_KEY =
-  process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY || 'pk_test_XVwg5IZH3I9Gti98hZw6KRzd00v5858heG'
+export const STRIPE_PUBLIC_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY || ''
 
 export const POSTHOG_URL =
   process.env.NEXT_PUBLIC_ENVIRONMENT === 'staging' ||

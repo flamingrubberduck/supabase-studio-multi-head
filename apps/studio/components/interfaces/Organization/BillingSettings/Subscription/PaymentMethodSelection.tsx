@@ -31,7 +31,7 @@ import { SetupIntentResponse } from '@/data/stripe/setup-intent-mutation'
 import { useSelectedOrganizationQuery } from '@/hooks/misc/useSelectedOrganization'
 import { BASE_PATH, STRIPE_PUBLIC_KEY } from '@/lib/constants'
 
-const stripePromise = loadStripe(STRIPE_PUBLIC_KEY)
+const stripePromise = STRIPE_PUBLIC_KEY ? loadStripe(STRIPE_PUBLIC_KEY) : Promise.resolve(null)
 
 export interface PaymentMethodSelectionProps {
   selectedPaymentMethod?: string
@@ -207,26 +207,28 @@ const PaymentMethodSelection = forwardRef(function PaymentMethodSelection(
 
   return (
     <>
-      <HCaptcha
-        ref={captchaRefCallback}
-        sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY!}
-        size="invisible"
-        onOpen={() => {
-          // [Joshen] This is to ensure that hCaptcha popup remains clickable
-          if (document !== undefined) document.body.classList.add('!pointer-events-auto')
-        }}
-        onClose={() => {
-          setSetupIntent(undefined)
-          if (document !== undefined) document.body.classList.remove('!pointer-events-auto')
-        }}
-        onVerify={(token) => {
-          setCaptchaToken(token)
-          if (document !== undefined) document.body.classList.remove('!pointer-events-auto')
-        }}
-        onExpire={() => {
-          setCaptchaToken(null)
-        }}
-      />
+      {process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY && (
+        <HCaptcha
+          ref={captchaRefCallback}
+          sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY}
+          size="invisible"
+          onOpen={() => {
+            // [Joshen] This is to ensure that hCaptcha popup remains clickable
+            if (document !== undefined) document.body.classList.add('!pointer-events-auto')
+          }}
+          onClose={() => {
+            setSetupIntent(undefined)
+            if (document !== undefined) document.body.classList.remove('!pointer-events-auto')
+          }}
+          onVerify={(token) => {
+            setCaptchaToken(token)
+            if (document !== undefined) document.body.classList.remove('!pointer-events-auto')
+          }}
+          onExpire={() => {
+            setCaptchaToken(null)
+          }}
+        />
+      )}
 
       <div>
         {isLoading || isCustomerProfileLoading ? (

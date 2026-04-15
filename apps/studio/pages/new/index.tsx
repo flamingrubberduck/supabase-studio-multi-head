@@ -88,18 +88,20 @@ const Wizard: NextPageWithLayout = () => {
         <title>{pageTitle}</title>
         <meta name="description" content="Supabase Studio" />
       </Head>
-      <HCaptcha
-        ref={captchaRefCallback}
-        sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY!}
-        size="invisible"
-        onVerify={(token) => {
-          setCaptchaToken(token)
-        }}
-        onClose={onLocalCancel}
-        onExpire={() => {
-          setCaptchaToken(null)
-        }}
-      />
+      {process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY && (
+        <HCaptcha
+          ref={captchaRefCallback}
+          sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY}
+          size="invisible"
+          onVerify={(token) => {
+            setCaptchaToken(token)
+          }}
+          onClose={onLocalCancel}
+          onExpire={() => {
+            setCaptchaToken(null)
+          }}
+        />
+      )}
 
       <NewOrgForm
         setupIntent={intent}

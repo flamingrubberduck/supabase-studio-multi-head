@@ -93,15 +93,17 @@ export const ChangeEmailAddressForm = ({ onClose }: { onClose: () => void }) => 
   return (
     <Form_Shadcn_ {...form}>
       <form id="update-email-form" onSubmit={form.handleSubmit(onSubmit)}>
-        <div className="self-center">
-          <HCaptcha
-            ref={captchaRef}
-            sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY!}
-            size="invisible"
-            onVerify={(token) => setCaptchaToken(token)}
-            onExpire={() => setCaptchaToken(null)}
-          />
-        </div>
+        {process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY && (
+          <div className="self-center">
+            <HCaptcha
+              ref={captchaRef}
+              sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY}
+              size="invisible"
+              onVerify={(token) => setCaptchaToken(token)}
+              onExpire={() => setCaptchaToken(null)}
+            />
+          </div>
+        )}
 
         <DialogSection>
           <FormField_Shadcn_

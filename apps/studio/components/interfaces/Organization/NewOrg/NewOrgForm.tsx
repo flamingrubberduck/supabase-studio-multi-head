@@ -93,7 +93,7 @@ const formSchema = z.object({
 
 type FormState = z.infer<typeof formSchema>
 
-const stripePromise = loadStripe(STRIPE_PUBLIC_KEY)
+const stripePromise = STRIPE_PUBLIC_KEY ? loadStripe(STRIPE_PUBLIC_KEY) : Promise.resolve(null)
 
 const FORM_ID = 'new-org-form'
 
