@@ -22,6 +22,7 @@ export interface StoredProject {
   ref: string
   name: string
   organization_id: number
+  organization_slug: string
   cloud_provider: string
   status: string
   region: string
@@ -71,6 +72,7 @@ function makeDefaultEntry(): StoredProject {
     ref: DEFAULT_PROJECT.ref,
     name: DEFAULT_PROJECT.name,
     organization_id: DEFAULT_PROJECT.organization_id,
+    organization_slug: 'default-org-slug',
     cloud_provider: DEFAULT_PROJECT.cloud_provider,
     status: DEFAULT_PROJECT.status,
     region: DEFAULT_PROJECT.region,
@@ -102,6 +104,7 @@ export function getStoredProjectByRef(ref: string): StoredProject | undefined {
 
 export interface CreateProjectData {
   name: string
+  organization_slug?: string
   public_url: string
   postgres_port: number
   kong_http_port: number
@@ -156,6 +159,7 @@ export function createStoredProject(data: CreateProjectData): StoredProject {
     ref,
     name: data.name,
     organization_id: 1,
+    organization_slug: data.organization_slug ?? 'default-org-slug',
     cloud_provider: 'localhost',
     status: data.status ?? 'COMING_UP',
     region: 'local',

@@ -27,6 +27,7 @@ import { AppLayout } from '@/components/layouts/AppLayout/AppLayout'
 import { DefaultLayout } from '@/components/layouts/DefaultLayout'
 import { PageLayout } from '@/components/layouts/PageLayout/PageLayout'
 import { ScaffoldContainer, ScaffoldSection } from '@/components/layouts/Scaffold'
+import { useOrganizationsQuery } from '@/data/organizations/organizations-query'
 import {
   type OrgProject,
   useOrgProjectsInfiniteQuery,
@@ -63,6 +64,10 @@ function statusBadgeVariant(
 const ProjectsPage: NextPageWithLayout = () => {
   const router = useRouter()
   const [confirmDelete, setConfirmDelete] = useState<SelfHostedProject | null>(null)
+
+  const { data: orgsData } = useOrganizationsQuery()
+  // Use the first org's slug for "New project" so it works for any org, not just the default
+  const newProjectOrgSlug = orgsData?.[0]?.slug ?? DEFAULT_ORG_SLUG
 
   const { data, isPending, isFetching, refetch } = useOrgProjectsInfiniteQuery(
     { slug: DEFAULT_ORG_SLUG },
@@ -108,7 +113,7 @@ const ProjectsPage: NextPageWithLayout = () => {
                 Refresh
               </Button>
               <Button asChild type="primary" icon={<Plus size={14} />}>
-                <Link href={`/new/${DEFAULT_ORG_SLUG}`}>New project</Link>
+                <Link href={`/new/${newProjectOrgSlug}`}>New project</Link>
               </Button>
             </div>
           </div>
@@ -143,7 +148,7 @@ const ProjectsPage: NextPageWithLayout = () => {
                     <TableCell colSpan={5} className="text-center text-foreground-muted py-10">
                       No projects yet.{' '}
                       <Link
-                        href={`/new/${DEFAULT_ORG_SLUG}`}
+                        href={`/new/${newProjectOrgSlug}`}
                         className="text-foreground underline underline-offset-2"
                       >
                         Create one
