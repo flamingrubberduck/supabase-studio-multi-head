@@ -81,6 +81,12 @@ services:
 
       # ── Multi-head specific ──────────────────────────────────────────────────
       STUDIO_DATA_DIR: /app/studio-data
+      # Host-side absolute path of the studio-data bind mount. The orchestrator
+      # uses this to write init files that the host Docker daemon can resolve as
+      # bind-mount sources when spawning new project stacks.
+      # Set automatically by start.sh; for manual setup run:
+      #   echo "HOST_STUDIO_DATA_DIR=$(realpath ./volumes/studio-data)" >> .env
+      HOST_STUDIO_DATA_DIR: ${HOST_STUDIO_DATA_DIR:-}
       # Hostname at which extra project stacks are reachable from inside this container.
       # Mac/Windows Docker Desktop: host.docker.internal
       # Linux: Docker bridge IP (e.g. 172.17.0.1) — start.sh sets this automatically

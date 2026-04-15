@@ -5,7 +5,8 @@
 #   bash start.sh
 #
 # What it does:
-#   1. Creates .env from .env.example if missing.
+#   1. Creates .env from .env.example if missing, then auto-generates and
+#      applies all secrets (JWT, API keys, passwords) via generate-keys.sh.
 #   2. Detects OS and sets MULTI_HEAD_HOST automatically.
 #   3. Creates volumes/studio-data/ for the project registry.
 #   4. Runs: docker compose up -d --remove-orphans
@@ -29,12 +30,11 @@ if [[ ! -f "$ENV_FILE" ]]; then
   if [[ -f "$ENV_EXAMPLE" ]]; then
     info "No .env found — copying from .env.example"
     cp "$ENV_EXAMPLE" "$ENV_FILE"
+    info "Generating secrets ..."
     echo ""
-    echo "  !! ACTION REQUIRED !!"
-    echo "  Edit $ENV_FILE and change the default secrets before continuing."
-    echo "  Generate secure values with:  bash utils/generate-keys.sh"
+    (cd "$SCRIPT_DIR" && sh utils/generate-keys.sh --update-env)
     echo ""
-    read -rp "  Press Enter to continue anyway (demo / local use only) ..."
+    info "Secrets generated and written to .env — save the values above for your records."
     echo ""
   else
     echo "ERROR: .env.example not found. Run this script from the multihead/ directory." >&2
@@ -108,6 +108,11 @@ else
 fi
 mkdir -p "$DATA_DIR_ABS"
 info "Project registry directory: $DATA_DIR_ABS"
+
+# HOST_STUDIO_DATA_DIR is the absolute host-side path of the studio-data directory.
+# The orchestrator needs this to export init files to a location the host Docker
+# daemon can resolve as bind-mount sources when spawning new project containers.
+set_env_var "HOST_STUDIO_DATA_DIR" "$DATA_DIR_ABS"
 
 # ── Pull the image ────────────────────────────────────────────────────────────
 
