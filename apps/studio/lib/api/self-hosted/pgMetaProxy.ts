@@ -27,7 +27,7 @@ export function getPgMetaProxyConfig(ref: string | undefined): PgMetaProxyConfig
     const project = getStoredProjectByRef(ref)
     if (project?.kong_http_port && project?.service_key) {
       return {
-        pgMetaBase: `http://localhost:${project.kong_http_port}/pg`,
+        pgMetaBase: `http://${process.env.MULTI_HEAD_HOST || 'localhost'}:${project.kong_http_port}/pg`,
         projectHeaders: {
           apikey: project.service_key,
           Authorization: `Bearer ${project.service_key}`,
