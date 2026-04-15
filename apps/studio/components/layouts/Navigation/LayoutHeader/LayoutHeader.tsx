@@ -148,7 +148,7 @@ export const LayoutHeader = ({
           <div className="hidden md:flex items-center text-sm">
             <HomeIcon />
             <div className="flex items-center md:pl-2">
-              {showOrgSelection && IS_PLATFORM ? (
+              {showOrgSelection ? (
                 <>
                   <LayoutHeaderDivider className="hidden md:block" />
                   <OrganizationDropdown />
@@ -166,7 +166,7 @@ export const LayoutHeader = ({
                       ease: 'easeOut',
                     }}
                   >
-                    {IS_PLATFORM && <LayoutHeaderDivider />}
+                    <LayoutHeaderDivider />
                     <ProjectDropdown />
 
                     {exceedingLimits && (
