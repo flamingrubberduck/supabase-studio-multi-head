@@ -5,6 +5,7 @@ import { databaseErrorSchema, PgMetaDatabaseError, WrappedResult } from './types
 import { assertSelfHosted, encryptString } from './util'
 import { getStoredProjectByRef } from './projectsStore'
 import { PG_META_URL } from '@/lib/constants/index'
+import { getPgMetaProxyConfig } from './pgMetaProxy'
 
 export type QueryOptions = {
   query: string
@@ -24,7 +25,7 @@ export type QueryOptions = {
  *   Calls PG_META_URL directly. pg-meta uses its own PG_META_DB_* env vars to connect.
  *
  * Docker-orchestrated projects (kong_http_port set):
- *   Calls the project's own pg-meta via its Kong: http://localhost:{kongPort}/pg
+ *   Calls the project's own pg-meta via its Kong: http://{MULTI_HEAD_HOST}:{kongPort}/pg
  *   Authenticates with the project's service key (apikey + Authorization headers).
  *   This avoids routing through supavisor, which fails SCRAM-SHA-256 auth on external connections.
  *
@@ -63,12 +64,12 @@ export async function executeQuery<T = unknown>({
     if (project) {
       if (project.kong_http_port) {
         // Docker-orchestrated project: each stack has its own pg-meta exposed behind
-        // Kong on localhost:{kongPort}/pg. Route directly — no x-connection-encrypted
+        // Kong on {MULTI_HEAD_HOST}:{kongPort}/pg. Route directly — no x-connection-encrypted
         // needed (avoids supavisor SCRAM-SHA-256 auth issues on external connections).
-        pgMetaBase = `http://localhost:${project.kong_http_port}/pg`
-        connectionHeaders = {
-          apikey: project.service_key,
-          Authorization: `Bearer ${project.service_key}`,
+        const config = getPgMetaProxyConfig(ref)
+        if (config.projectHeaders) {
+          pgMetaBase = config.pgMetaBase
+          connectionHeaders = config.projectHeaders
         }
       } else if (project.db_host) {
         // Legacy manual-connection project: use default pg-meta with an encrypted
