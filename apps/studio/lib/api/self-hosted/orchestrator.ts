@@ -257,27 +257,53 @@ export function prepareMultiHeadComposeFile(): string {
     transformed.splice(volIdx + 1, 0, '  db-data:')
   }
 
-  // 5. In the kong service, replace depends_on: studio with depends_on: analytics.
-  //    The default compose has kong wait for studio (service_healthy) which creates a
-  //    4-level health chain (db→analytics→studio→kong). In Docker Compose v2+ detached
-  //    mode this can leave kong stuck in Created state. Kong only needs the API services
-  //    to be ready — analytics being healthy is sufficient and much faster.
+  // 5. Shorten dependency chains that cause containers to get stuck in Created state
+  //    when Docker Compose v2+ runs in detached mode (-d).
+  //
+  //    a) kong: depends_on studio (service_healthy) → depends_on analytics (service_healthy)
+  //       The default compose has a 4-level chain: db→analytics→studio→kong. Cutting
+  //       studio out lets kong start as soon as the API services are ready.
+  //
+  //    b) functions: depends_on kong (service_healthy) → condition: service_started
+  //       Functions only needs kong to have started, not to be fully healthy, so we
+  //       relax the condition. This avoids functions being permanently stuck in Created
+  //       behind the already-long kong startup.
   let inKong = false
   let inKongDependsOn = false
+  let inFunctions = false
+  let inFunctionsDependsOn = false
+  let inFunctionsKong = false
   const final = transformed.map((line) => {
+    // Track which top-level service we are in
     if (/^  kong:/.test(line)) {
-      inKong = true
-      inKongDependsOn = false
+      inKong = true; inKongDependsOn = false
+      inFunctions = false; inFunctionsDependsOn = false; inFunctionsKong = false
+    } else if (/^  functions:/.test(line)) {
+      inFunctions = true; inFunctionsDependsOn = false; inFunctionsKong = false
+      inKong = false; inKongDependsOn = false
     } else if (/^  [a-zA-Z]/.test(line)) {
-      inKong = false
-      inKongDependsOn = false
+      inKong = false; inKongDependsOn = false
+      inFunctions = false; inFunctionsDependsOn = false; inFunctionsKong = false
     }
+
+    // (a) kong: depends_on: studio → analytics
     if (inKong && /^\s+depends_on:\s*$/.test(line)) inKongDependsOn = true
     else if (inKong && inKongDependsOn && !/^\s{6}/.test(line)) inKongDependsOn = false
-
     if (inKong && inKongDependsOn && /^\s+studio:\s*$/.test(line)) {
       return line.replace('studio:', 'analytics:')
     }
+
+    // (b) functions: depends_on: kong: condition → service_started
+    if (inFunctions && /^\s+depends_on:\s*$/.test(line)) inFunctionsDependsOn = true
+    else if (inFunctions && inFunctionsDependsOn && !/^\s{6}/.test(line)) {
+      inFunctionsDependsOn = false; inFunctionsKong = false
+    }
+    if (inFunctions && inFunctionsDependsOn && /^\s+kong:\s*$/.test(line)) inFunctionsKong = true
+    else if (inFunctions && inFunctionsKong && !/^\s{8}/.test(line)) inFunctionsKong = false
+    if (inFunctions && inFunctionsKong && /^\s+condition:\s*service_healthy/.test(line)) {
+      return line.replace('service_healthy', 'service_started')
+    }
+
     return line
   })
 
@@ -400,10 +426,20 @@ export async function launchProjectStack(opts: LaunchOptions): Promise<string> {
   fs.writeFileSync(envFile, envContent, 'utf-8')
 
   const projectName = `supabase-${ref}`
+
+  // Pass a minimal environment so that Studio's own Supabase vars (POSTGRES_PORT,
+  // POOLER_PROXY_PORT_TRANSACTION, POSTGRES_PASSWORD, …) don't shadow the per-project
+  // values supplied via --env-file. Docker Compose gives shell env priority over
+  // --env-file, so we strip all Supabase-specific vars and keep only OS essentials.
+  const safeEnv: NodeJS.ProcessEnv = {}
+  for (const key of ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TERM', 'TMPDIR', 'TMP', 'TEMP', 'XDG_RUNTIME_DIR', 'DOCKER_HOST', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH', 'DOCKER_BUILDKIT']) {
+    if (process.env[key] !== undefined) safeEnv[key] = process.env[key]
+  }
+
   const result = spawnSync(
     'docker',
     ['compose', '-p', projectName, '--env-file', envFile, '-f', composeFile, 'up', '-d', '--remove-orphans'],
-    { encoding: 'utf-8', timeout: 180_000, stdio: 'pipe' }
+    { encoding: 'utf-8', timeout: 180_000, stdio: 'pipe', env: safeEnv }
   )
   if (result.error) throw result.error
   if (result.status !== 0) {
