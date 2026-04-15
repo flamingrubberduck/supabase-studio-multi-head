@@ -40,7 +40,7 @@ const handleGetAll = async (_req: NextApiRequest, res: NextApiResponse) => {
 }
 
 const handleCreate = async (req: NextApiRequest, res: NextApiResponse) => {
-  const { name } = req.body
+  const { name, organization_slug } = req.body
 
   if (!name?.trim()) {
     return res.status(400).json({ data: null, error: { message: 'Project name is required' } })
@@ -73,6 +73,7 @@ const handleCreate = async (req: NextApiRequest, res: NextApiResponse) => {
   // Persist the record immediately with COMING_UP so the UI can show progress
   const project = createStoredProject({
     name: name.trim(),
+    organization_slug: organization_slug ?? 'default-org-slug',
     public_url: publicUrl,
     postgres_port: ports.postgresPort,
     kong_http_port: ports.kongHttpPort,
@@ -111,7 +112,7 @@ const handleCreate = async (req: NextApiRequest, res: NextApiResponse) => {
     ref: project.ref,
     name: project.name,
     organization_id: project.organization_id,
-    organization_slug: 'default-org-slug',
+    organization_slug: project.organization_slug,
     cloud_provider: project.cloud_provider,
     status: 'COMING_UP',
     region: project.region,
