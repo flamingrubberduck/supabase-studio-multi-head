@@ -3,6 +3,7 @@ import { components } from 'api-types'
 
 import { organizationKeys } from './keys'
 import { get, handleError } from '@/data/fetchers'
+import { IS_PLATFORM } from '@/lib/constants'
 import { UseCustomQueryOptions } from '@/types'
 
 export type MemberWithFreeProjectLimit = components['schemas']['MemberWithFreeProjectLimit']
@@ -42,6 +43,6 @@ export const useFreeProjectLimitCheckQuery = <TData = FreeProjectLimitCheckData>
   useQuery<FreeProjectLimitCheckData, FreeProjectLimitCheckError, TData>({
     queryKey: organizationKeys.freeProjectLimitCheck(slug),
     queryFn: ({ signal }) => getFreeProjectLimitCheck({ slug }, signal),
-    enabled: enabled && typeof slug !== 'undefined',
+    enabled: IS_PLATFORM && enabled && typeof slug !== 'undefined',
     ...options,
   })
