@@ -97,7 +97,7 @@ const ProjectsPage: NextPageWithLayout = () => {
     }
   )
 
-  // Track the slug whose data is currently rendered. isSwitchingOrgOrg is true
+  // Track the slug whose data is currently rendered. isSwitchingOrg is true
   // from the moment the user picks a different org until the first fetch for
   // that slug settles — but NOT during subsequent background polls (which also
   // set isFetching but shouldn't hide rows or show skeletons).
@@ -107,7 +107,7 @@ const ProjectsPage: NextPageWithLayout = () => {
       setRenderedSlug(selectedOrgSlug)
     }
   }, [isFetching, selectedOrgSlug])
-  const isSwitchingOrgOrg = !!selectedOrgSlug && selectedOrgSlug !== renderedSlug
+  const isSwitchingOrg = !!selectedOrgSlug && selectedOrgSlug !== renderedSlug
 
   const projects = (data?.pages.flatMap((p) => p?.projects ?? []) ?? []) as SelfHostedProject[]
 
