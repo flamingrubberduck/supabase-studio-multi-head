@@ -1,0 +1,62 @@
+import { NextApiRequest, NextApiResponse } from 'next'
+
+import apiWrapper from '@/lib/api/apiWrapper'
+import {
+  deleteStoredOrganization,
+  getStoredOrganizationBySlug,
+} from '@/lib/api/self-hosted/organizationsStore'
+import { getStoredProjects } from '@/lib/api/self-hosted/projectsStore'
+
+export default (req: NextApiRequest, res: NextApiResponse) => apiWrapper(req, res, handler)
+
+async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const { method } = req
+
+  switch (method) {
+    case 'GET':
+      return handleGet(req, res)
+    case 'DELETE':
+      return handleDelete(req, res)
+    default:
+      res.setHeader('Allow', ['GET', 'DELETE'])
+      res.status(405).json({ data: null, error: { message: `Method ${method} Not Allowed` } })
+  }
+}
+
+const handleGet = async (req: NextApiRequest, res: NextApiResponse) => {
+  const slug = req.query.slug as string
+  const org = getStoredOrganizationBySlug(slug)
+
+  if (!org) {
+    return res.status(404).json({ data: null, error: { message: 'Organization not found' } })
+  }
+
+  return res.status(200).json(org)
+}
+
+const handleDelete = async (req: NextApiRequest, res: NextApiResponse) => {
+  const slug = req.query.slug as string
+
+  if (slug === 'default-org-slug') {
+    return res
+      .status(400)
+      .json({ data: null, error: { message: 'The default organization cannot be deleted.' } })
+  }
+
+  const org = getStoredOrganizationBySlug(slug)
+  if (!org) {
+    return res.status(404).json({ data: null, error: { message: 'Organization not found' } })
+  }
+
+  // Refuse if the org still has projects
+  const projects = getStoredProjects().filter((p) => p.organization_slug === slug)
+  if (projects.length > 0) {
+    return res.status(400).json({
+      data: null,
+      error: { message: 'Cannot delete an organization that still has projects.' },
+    })
+  }
+
+  deleteStoredOrganization(slug)
+  return res.status(200).json({ slug, name: org.name })
+}
