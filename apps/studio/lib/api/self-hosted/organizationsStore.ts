@@ -92,6 +92,11 @@ export interface CreateOrganizationData {
   tier?: string
 }
 
+export function deleteStoredOrganization(slug: string): void {
+  const existing = readFromDisk()
+  writeToDisk(existing.filter((o) => o.slug !== slug))
+}
+
 export function createStoredOrganization(data: CreateOrganizationData): StoredOrganization {
   const existing = readFromDisk()
   const all = getStoredOrganizations()
