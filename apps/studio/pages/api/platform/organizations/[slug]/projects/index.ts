@@ -18,9 +18,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 }
 
 const handleGetAll = async (req: NextApiRequest, res: NextApiResponse) => {
+  const { slug } = req.query
   const { search, limit = '96', offset = '0' } = req.query
 
-  let projects = getStoredProjects()
+  let projects = getStoredProjects().filter(
+    (p) => p.organization_slug === slug
+  )
 
   if (search && typeof search === 'string' && search.length > 0) {
     const q = search.toLowerCase()
