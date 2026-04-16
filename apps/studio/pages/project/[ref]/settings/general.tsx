@@ -34,11 +34,12 @@ const ProjectSettings: NextPageWithLayout = () => {
     useIsFeatureEnabled(['projects:transfer', 'project_settings:custom_domains'])
   const router = useRouter()
 
+  const { ref: projectRef } = router.query
   useEffect(() => {
-    if (!IS_PLATFORM) {
-      router.push(`/project/default/settings/log-drains`)
+    if (!IS_PLATFORM && projectRef) {
+      router.push(`/project/${projectRef}/settings/log-drains`)
     }
-  }, [router])
+  }, [router, projectRef])
 
   const { data: subscription } = useOrgSubscriptionQuery({ orgSlug: selectedOrganization?.slug })
   const hasHipaaAddon = subscriptionHasHipaaAddon(subscription)

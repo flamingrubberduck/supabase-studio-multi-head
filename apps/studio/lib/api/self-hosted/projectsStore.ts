@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { DEFAULT_PROJECT } from '@/lib/constants/api'
+import { getStoredOrganizationBySlug } from './organizationsStore'
 
 /**
  * On-disk project record.
@@ -155,12 +156,16 @@ export function createStoredProject(data: CreateProjectData): StoredProject {
   const id = Math.max(...all.map((p) => p.id), 0) + 1
   const ref = crypto.randomBytes(6).toString('hex')
 
+  const orgSlug = data.organization_slug ?? 'default-org-slug'
+  const org = getStoredOrganizationBySlug(orgSlug)
+  const orgId = org?.id ?? 1
+
   const project: StoredProject = {
     id,
     ref,
     name: data.name,
-    organization_id: 1,
-    organization_slug: data.organization_slug ?? 'default-org-slug',
+    organization_id: orgId,
+    organization_slug: orgSlug,
     cloud_provider: 'localhost',
     status: data.status ?? 'COMING_UP',
     region: 'local',
@@ -191,12 +196,15 @@ export function importStoredProject(data: ImportProjectData): StoredProject {
   const id = Math.max(...all.map((p) => p.id), 0) + 1
   const ref = crypto.randomBytes(6).toString('hex')
 
+  const importOrgSlug = data.organization_slug ?? 'default-org-slug'
+  const importOrg = getStoredOrganizationBySlug(importOrgSlug)
+
   const project: StoredProject = {
     id,
     ref,
     name: data.name,
-    organization_id: 1,
-    organization_slug: data.organization_slug ?? 'default-org-slug',
+    organization_id: importOrg?.id ?? 1,
+    organization_slug: importOrgSlug,
     cloud_provider: 'localhost',
     status: 'ACTIVE_HEALTHY',
     region: 'local',

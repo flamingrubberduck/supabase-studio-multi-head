@@ -44,7 +44,7 @@ const AccountLayout = ({ children, title }: PropsWithChildren<AccountLayoutProps
         ? `/org/${lastVisitedOrganization}`
         : IS_PLATFORM
           ? '/organizations'
-          : '/project/default'
+          : '/projects'
 
   const pageTitle = buildStudioPageTitle({
     section: title,
@@ -125,7 +125,7 @@ const AccountLayout = ({ children, title }: PropsWithChildren<AccountLayoutProps
 
   useEffect(() => {
     if (!IS_PLATFORM && currentPath !== '/account/me') {
-      router.push('/project/default')
+      router.push('/projects')
     }
   }, [currentPath, router])
 
