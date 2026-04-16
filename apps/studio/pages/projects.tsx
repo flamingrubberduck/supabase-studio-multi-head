@@ -97,10 +97,17 @@ const ProjectsPage: NextPageWithLayout = () => {
     }
   )
 
-  // isSwitching is true from the moment the user picks a new org until the
-  // fresh data for that org has landed. This covers both the "never fetched"
-  // path (isPending) and the "cached but stale" path (isFetching, !isPending).
-  const isSwitching = isPending || isFetching
+  // Track the slug whose data is currently rendered. isSwitchingOrgOrg is true
+  // from the moment the user picks a different org until the first fetch for
+  // that slug settles — but NOT during subsequent background polls (which also
+  // set isFetching but shouldn't hide rows or show skeletons).
+  const [renderedSlug, setRenderedSlug] = useState('')
+  useEffect(() => {
+    if (!isFetching && selectedOrgSlug) {
+      setRenderedSlug(selectedOrgSlug)
+    }
+  }, [isFetching, selectedOrgSlug])
+  const isSwitchingOrgOrg = !!selectedOrgSlug && selectedOrgSlug !== renderedSlug
 
   const projects = (data?.pages.flatMap((p) => p?.projects ?? []) ?? []) as SelfHostedProject[]
 
@@ -119,7 +126,7 @@ const ProjectsPage: NextPageWithLayout = () => {
     },
   })
 
-  const canDeleteOrg = !isPending && projects.length === 0
+  const canDeleteOrg = !isSwitchingOrg && !isFetching && projects.length === 0
 
   return (
     <>
@@ -153,7 +160,7 @@ const ProjectsPage: NextPageWithLayout = () => {
                 </Select_Shadcn_>
               )}
 
-              {!isSwitching && !isLoadingOrgs && (
+              {!isSwitchingOrg && !isLoadingOrgs && (
                 <span className="text-foreground-muted text-sm">
                   {projects.length} project{projects.length !== 1 ? 's' : ''}
                 </span>
@@ -205,7 +212,7 @@ const ProjectsPage: NextPageWithLayout = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(isSwitching || isLoadingOrgs) && (
+                {(isSwitchingOrg || isLoadingOrgs) && (
                   <>
                     {Array.from({ length: 3 }).map((_, i) => (
                       <TableRow key={i}>
@@ -217,7 +224,7 @@ const ProjectsPage: NextPageWithLayout = () => {
                   </>
                 )}
 
-                {!isSwitching && !isLoadingOrgs && projects.length === 0 && (
+                {!isSwitchingOrg && !isLoadingOrgs && projects.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center text-foreground-muted py-10">
                       No projects in{' '}
@@ -234,7 +241,7 @@ const ProjectsPage: NextPageWithLayout = () => {
                   </TableRow>
                 )}
 
-                {!isSwitching && projects.map((project) => (
+                {!isSwitchingOrg && projects.map((project) => (
                   <TableRow
                     key={project.ref}
                     className="cursor-pointer"

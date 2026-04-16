@@ -30,7 +30,7 @@ export const RouteValidationWrapper = ({ children }: PropsWithChildren<{}>) => {
     ? !!lastVisitedOrganization
       ? `/org/${lastVisitedOrganization}`
       : '/organizations'
-    : '/project/default'
+    : '/projects'
 
   /**
    * Array of urls/routes that should be ignored

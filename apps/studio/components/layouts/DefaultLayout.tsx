@@ -55,7 +55,7 @@ export const DefaultLayout = ({
         ? `/org/${lastVisitedOrganization}`
         : IS_PLATFORM
           ? '/organizations'
-          : '/project/default'
+          : '/projects'
     : undefined
 
   useCheckLatestDeploy()
