@@ -128,6 +128,7 @@ export interface CreateProjectData {
  */
 export interface ImportProjectData {
   name: string
+  organization_slug?: string
   public_url: string
   db_password: string
   anon_key: string
@@ -195,6 +196,7 @@ export function importStoredProject(data: ImportProjectData): StoredProject {
     ref,
     name: data.name,
     organization_id: 1,
+    organization_slug: data.organization_slug ?? 'default-org-slug',
     cloud_provider: 'localhost',
     status: 'ACTIVE_HEALTHY',
     region: 'local',
