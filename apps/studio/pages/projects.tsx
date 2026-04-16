@@ -97,6 +97,11 @@ const ProjectsPage: NextPageWithLayout = () => {
     }
   )
 
+  // isSwitching is true from the moment the user picks a new org until the
+  // fresh data for that org has landed. This covers both the "never fetched"
+  // path (isPending) and the "cached but stale" path (isFetching, !isPending).
+  const isSwitching = isPending || isFetching
+
   const projects = (data?.pages.flatMap((p) => p?.projects ?? []) ?? []) as SelfHostedProject[]
 
   const { mutate: deleteProject, isPending: isDeletingProject } = useProjectDeleteMutation({
@@ -148,7 +153,7 @@ const ProjectsPage: NextPageWithLayout = () => {
                 </Select_Shadcn_>
               )}
 
-              {!isPending && (
+              {!isSwitching && !isLoadingOrgs && (
                 <span className="text-foreground-muted text-sm">
                   {projects.length} project{projects.length !== 1 ? 's' : ''}
                 </span>
@@ -200,7 +205,7 @@ const ProjectsPage: NextPageWithLayout = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(isPending || isLoadingOrgs) && (
+                {(isSwitching || isLoadingOrgs) && (
                   <>
                     {Array.from({ length: 3 }).map((_, i) => (
                       <TableRow key={i}>
@@ -212,10 +217,11 @@ const ProjectsPage: NextPageWithLayout = () => {
                   </>
                 )}
 
-                {!isPending && !isLoadingOrgs && projects.length === 0 && (
+                {!isSwitching && !isLoadingOrgs && projects.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center text-foreground-muted py-10">
-                      No projects yet.{' '}
+                      No projects in{' '}
+                      <span className="text-foreground font-medium">{selectedOrg?.name}</span> yet.{' '}
                       {selectedOrgSlug && (
                         <Link
                           href={`/new/${selectedOrgSlug}`}
@@ -224,12 +230,11 @@ const ProjectsPage: NextPageWithLayout = () => {
                           Create one
                         </Link>
                       )}
-                      .
                     </TableCell>
                   </TableRow>
                 )}
 
-                {projects.map((project) => (
+                {!isSwitching && projects.map((project) => (
                   <TableRow
                     key={project.ref}
                     className="cursor-pointer"
