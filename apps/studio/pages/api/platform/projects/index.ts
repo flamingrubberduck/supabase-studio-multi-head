@@ -34,7 +34,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 const handleGetAll = async (req: NextApiRequest, res: NextApiResponse) => {
   const { limit = '100', offset = '0', search } = req.query
 
-  let projects = getStoredProjects()
+  // Standbys are internal implementation details — hide them from the project list
+  let projects = getStoredProjects().filter((p) => p.role !== 'standby')
 
   if (search && typeof search === 'string' && search.length > 0) {
     const q = search.toLowerCase()

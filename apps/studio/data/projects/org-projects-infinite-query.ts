@@ -19,6 +19,7 @@ interface GetOrgProjectsInfiniteVariables {
   search?: string
   page?: number
   statuses?: string[]
+  includeStandby?: boolean
 }
 
 export type OrgProjectsResponse = components['schemas']['OrganizationProjectsResponse']
@@ -32,6 +33,7 @@ export async function getOrganizationProjects(
     sort = 'name_asc',
     search: _search = '',
     statuses: _statuses = [],
+    includeStandby = false,
   }: GetOrgProjectsInfiniteVariables,
   signal?: AbortSignal,
   headers?: Record<string, string>
@@ -41,9 +43,10 @@ export async function getOrganizationProjects(
   const offset = page * limit
   const search = _search.length === 0 ? undefined : _search
   const statuses = _statuses.length === 0 ? undefined : _statuses.join(',')
+  const include_standby = includeStandby ? 'true' : undefined
 
   const { data, error } = await get('/platform/organizations/{slug}/projects', {
-    params: { path: { slug }, query: { limit, offset, sort, search, statuses } },
+    params: { path: { slug }, query: { limit, offset, sort, search, statuses, ...({ include_standby } as any) } },
     signal,
     headers,
   })
@@ -62,6 +65,7 @@ export const useOrgProjectsInfiniteQuery = <TData = OrgProjectsInfiniteData>(
     sort = 'name_asc',
     search,
     statuses = [],
+    includeStandby = false,
   }: GetOrgProjectsInfiniteVariables,
   {
     enabled = true,
@@ -76,9 +80,9 @@ export const useOrgProjectsInfiniteQuery = <TData = OrgProjectsInfiniteData>(
 ) => {
   const { profile } = useProfile()
   return useInfiniteQuery({
-    queryKey: projectKeys.infiniteListByOrg(slug, { limit, sort, search, statuses }),
+    queryKey: projectKeys.infiniteListByOrg(slug, { limit, sort, search, statuses, includeStandby }),
     queryFn: ({ signal, pageParam }) =>
-      getOrganizationProjects({ slug, limit, page: pageParam, sort, search, statuses }, signal),
+      getOrganizationProjects({ slug, limit, page: pageParam, sort, search, statuses, includeStandby }, signal),
     enabled: enabled && profile !== undefined && typeof slug !== 'undefined',
     staleTime: 30 * 60 * 1000, // 30 minutes
     initialPageParam: 0,

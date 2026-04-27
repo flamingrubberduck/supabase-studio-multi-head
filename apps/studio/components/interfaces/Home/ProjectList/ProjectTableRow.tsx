@@ -55,6 +55,11 @@ export const ProjectTableRow = ({
   const githubRepository = githubIntegration?.metadata.name ?? undefined
   const handleNavigation = createNavigationHandler(url, router)
 
+  // Failover fields — added by self-hosted multi-head, absent on cloud
+  const p = project as typeof project & { role?: string; primary_name?: string }
+  const isStandby = p.role === 'standby'
+  const primaryName = p.primary_name
+
   const handleCopyProjectRef = (e: React.SyntheticEvent) => {
     e.stopPropagation()
     copyToClipboard(projectRef)
@@ -75,11 +80,21 @@ export const ProjectTableRow = ({
         <TableCell>
           <div className="flex flex-col gap-y-2">
             <div>
-              <div className="flex items-center gap-x-1.5">
+              <div className="flex items-center gap-x-1.5 flex-wrap gap-y-1">
                 <h5 className="text-sm">{name}</h5>
                 {isDefaultProject && (
                   <Badge variant="default" className="text-[10px] leading-none py-0.5 px-1.5">
                     Default
+                  </Badge>
+                )}
+                {isStandby && (
+                  <Badge variant="warning" className="text-[10px] leading-none py-0.5 px-1.5">
+                    Standby
+                  </Badge>
+                )}
+                {isStandby && primaryName && (
+                  <Badge variant="outline" className="text-[10px] leading-none py-0.5 px-1.5 text-foreground-muted">
+                    for {primaryName}
                   </Badge>
                 )}
               </div>

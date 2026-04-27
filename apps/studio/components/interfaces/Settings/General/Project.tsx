@@ -12,9 +12,11 @@ import {
 
 import PauseProjectButton from './Infrastructure/PauseProjectButton'
 import RestartServerButton from './Infrastructure/RestartServerButton'
+import { FailoverSection } from './Infrastructure/FailoverSection'
 import { useIsFeatureEnabled } from '@/hooks/misc/useIsFeatureEnabled'
 import { useSelectedOrganizationQuery } from '@/hooks/misc/useSelectedOrganization'
 import { useSelectedProjectQuery } from '@/hooks/misc/useSelectedProject'
+import { IS_PLATFORM } from '@/lib/constants'
 
 export const Project = () => {
   const { data: project } = useSelectedProjectQuery()
@@ -71,6 +73,8 @@ export const Project = () => {
           </Card>
         </PageSectionContent>
       </PageSection>
+
+      {!IS_PLATFORM && <FailoverSection />}
 
       {!isBranch && (
         <PageSection>

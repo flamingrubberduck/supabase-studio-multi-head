@@ -18,12 +18,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 }
 
 const handleGetAll = async (req: NextApiRequest, res: NextApiResponse) => {
-  const { slug } = req.query
-  const { search, limit = '96', offset = '0' } = req.query
+  const { slug, search, limit = '96', offset = '0', include_standby } = req.query
+  const showStandby = include_standby === 'true'
 
-  let projects = getStoredProjects().filter(
-    (p) => p.organization_slug === slug
-  )
+  // Build a ref→name map across ALL projects so standbys can resolve their primary's name
+  const allProjects = getStoredProjects()
+  const nameByRef = Object.fromEntries(allProjects.map((p) => [p.ref, p.name]))
+
+  let projects = allProjects
+    .filter((p) => !slug || p.organization_slug === slug)
+    .filter((p) => showStandby || p.role !== 'standby')
 
   if (search && typeof search === 'string' && search.length > 0) {
     const q = search.toLowerCase()
@@ -51,6 +55,11 @@ const handleGetAll = async (req: NextApiRequest, res: NextApiResponse) => {
       public_url: p.public_url,
       kong_http_port: p.kong_http_port,
       is_branch: false,
+      // Failover fields — undefined on non-self-hosted, stripped by JSON.stringify
+      role: p.role,
+      primary_ref: p.primary_ref,
+      primary_name: p.primary_ref ? nameByRef[p.primary_ref] : undefined,
+      standby_ref: p.standby_ref,
       databases: [
         {
           identifier: p.ref,
