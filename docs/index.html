@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Supabase Studio Multi-Head — Manage multiple Supabase projects from one dashboard</title>
+  <meta name="description" content="Run and manage multiple isolated Supabase projects from a single self-hosted dashboard. No Supabase Cloud account needed." />
+  <meta property="og:title" content="Supabase Studio Multi-Head" />
+  <meta property="og:description" content="Run and manage multiple isolated Supabase projects from a single self-hosted dashboard. No cloud account needed." />
+  <meta property="og:type" content="website" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --border: #2a2e45;
+      --green: #3ecf8e;
+      --green-dim: #1a3d2b;
+      --text: #ededed;
+      --muted: #8b92a5;
+      --code-bg: #111827;
+      --radius: 10px;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    a { color: var(--green); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .container { max-width: 860px; margin: 0 auto; padding: 0 24px; }
+
+    /* Nav */
+    nav {
+      border-bottom: 1px solid var(--border);
+      padding: 16px 0;
+      position: sticky; top: 0;
+      background: rgba(15,17,23,0.92);
+      backdrop-filter: blur(8px);
+      z-index: 10;
+    }
+    nav .inner {
+      max-width: 860px; margin: 0 auto; padding: 0 24px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo { font-weight: 700; font-size: 15px; color: var(--text); }
+    .nav-logo span { color: var(--green); }
+    .nav-links { display: flex; gap: 20px; }
+    .nav-links a { color: var(--muted); font-size: 14px; }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+    /* Hero */
+    .hero { padding: 80px 0 64px; text-align: center; }
+    .badge {
+      display: inline-block;
+      background: var(--green-dim); color: var(--green);
+      font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; padding: 4px 14px;
+      border-radius: 999px; margin-bottom: 24px;
+      border: 1px solid rgba(62,207,142,0.2);
+    }
+    h1 {
+      font-size: clamp(28px, 5vw, 46px);
+      font-weight: 800; line-height: 1.15;
+      letter-spacing: -0.02em; margin-bottom: 20px;
+    }
+    h1 em { font-style: normal; color: var(--green); }
+    .hero-sub {
+      font-size: 18px; color: var(--muted);
+      max-width: 560px; margin: 0 auto 36px;
+    }
+    .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 24px; border-radius: var(--radius);
+      font-size: 15px; font-weight: 600;
+      cursor: pointer; transition: opacity .15s;
+    }
+    .btn:hover { opacity: .85; text-decoration: none; }
+    .btn-primary { background: var(--green); color: #061a0e; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+
+    /* Sections */
+    .section { padding: 56px 0; border-top: 1px solid var(--border); }
+    .section-label {
+      font-size: 12px; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--green); margin-bottom: 12px;
+    }
+    h2 { font-size: 28px; font-weight: 700; margin-bottom: 14px; letter-spacing: -0.01em; }
+    p { color: var(--muted); margin-bottom: 14px; font-size: 15px; }
+    p:last-child { margin-bottom: 0; }
+
+    /* Feature cards */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px; margin-top: 32px;
+    }
+    .feature-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 22px;
+    }
+    .feature-icon { font-size: 22px; margin-bottom: 10px; }
+    .feature-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+    .feature-card p { font-size: 14px; margin: 0; }
+
+    /* Steps */
+    .steps { margin-top: 28px; display: flex; flex-direction: column; gap: 12px; }
+    .step {
+      display: flex; gap: 16px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 18px 22px; align-items: flex-start;
+    }
+    .step-num {
+      flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
+      background: var(--green-dim); color: var(--green);
+      font-weight: 700; font-size: 13px;
+      display: flex; align-items: center; justify-content: center; margin-top: 1px;
+      border: 1px solid rgba(62,207,142,0.25);
+    }
+    .step-body h3 { font-size: 15px; font-weight: 600; margin-bottom: 3px; color: var(--text); }
+    .step-body p { font-size: 14px; margin: 0; }
+
+    /* Code */
+    .code-wrap {
+      background: var(--code-bg); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 18px 22px;
+      margin-top: 20px; overflow-x: auto;
+    }
+    pre { font-family: 'Menlo', 'Consolas', monospace; font-size: 13px; line-height: 1.75; color: #a0e8c0; }
+    .comment { color: #4a5568; }
+
+    /* Table */
+    .table-wrap { overflow-x: auto; margin-top: 24px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th {
+      text-align: left; padding: 10px 16px;
+      background: var(--surface2); border: 1px solid var(--border);
+      font-weight: 600; color: var(--text);
+    }
+    td { padding: 10px 16px; border: 1px solid var(--border); color: var(--muted); }
+    td:first-child { color: var(--text); font-weight: 500; }
+    .yes { color: var(--green); font-weight: 600; }
+    .no { color: #4a5568; }
+
+    /* Audience */
+    .audience-list { list-style: none; margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
+    .audience-list li { display: flex; gap: 12px; align-items: flex-start; font-size: 15px; color: var(--muted); }
+    .audience-list li::before { content: "→"; color: var(--green); flex-shrink: 0; font-weight: 700; }
+
+    /* CTA bottom */
+    .cta-bottom { padding: 72px 0; text-align: center; border-top: 1px solid var(--border); }
+    .cta-bottom h2 { margin-bottom: 12px; }
+    .cta-bottom p { margin-bottom: 28px; }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border); padding: 24px 0;
+      text-align: center; font-size: 13px; color: var(--muted);
+    }
+    footer a { color: var(--muted); }
+    footer a:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="inner">
+    <span class="nav-logo">Supabase <span>Multi-Head</span></span>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#quickstart">Quickstart</a>
+      <a href="#pricing">Pricing</a>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="container">
+    <div class="badge">Self-Hosted · Open Core</div>
+    <h1>Manage <em>multiple Supabase projects</em><br>from one dashboard</h1>
+    <p class="hero-sub">
+      A drop-in upgrade to Supabase Studio that lets you spin up, manage, and monitor
+      multiple isolated Supabase projects — all from a single self-hosted UI.
+      No Supabase Cloud account. No per-project dashboards.
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#quickstart">Get started in 30 seconds</a>
+      <a class="btn btn-outline" href="#pricing">See pricing</a>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="section-label">The problem</div>
+    <h2>Self-hosting Supabase is great.<br>Until you need a second project.</h2>
+    <p>
+      The official self-hosted Supabase stack is built for a single project. Want a staging
+      environment, a client project, or a separate database? You're stuck spinning up a whole
+      new Docker stack manually and juggling multiple dashboards — or paying Supabase Cloud $25+
+      per project per month.
+    </p>
+    <p>
+      Multi-Head Studio fixes this. It replaces the standard Studio container with one that can
+      create and manage additional Supabase stacks on demand, straight from the UI you already know.
+    </p>
+  </div>
+</section>
+
+<section class="section" id="features">
+  <div class="container">
+    <div class="section-label">Features</div>
+    <h2>Everything you need, nothing you don't</h2>
+    <div class="features">
+      <div class="feature-card">
+        <div class="feature-icon">🗂️</div>
+        <h3>Multiple projects, one UI</h3>
+        <p>Create and switch between isolated Supabase projects without leaving the dashboard.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🐳</div>
+        <h3>No Docker-in-Docker</h3>
+        <p>Uses the host Docker socket to launch sibling containers. Clean and production-safe.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔒</div>
+        <h3>Credential isolation</h3>
+        <p>Each project gets its own Postgres password, JWT secret, anon key, and service key — generated fresh.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📦</div>
+        <h3>Drop-in upgrade</h3>
+        <p>Already running Supabase self-hosted? One command replaces only the Studio container. Your data stays untouched.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🌐</div>
+        <h3>Import remote stacks</h3>
+        <p>Register existing Supabase deployments on other hosts and browse them from one place.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h3>Standby &amp; failover <span style="font-size:11px;color:var(--green);font-weight:600;">PRO</span></h3>
+        <p>Provision warm standbys and trigger failover with one click. WAL streaming replication included.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="section-label">How it works</div>
+    <h2>Port blocks. No manual config.</h2>
+    <p>
+      Each new project gets a port block automatically offset by +10. Studio writes a project
+      registry to disk and launches a full Supabase stack as a sibling Docker Compose project.
+      No YAML editing, no port hunting.
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Service</th><th>Default project</th><th>2nd project</th><th>3rd project</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Kong (HTTP)</td><td>8000</td><td>8010</td><td>8020</td></tr>
+          <tr><td>Postgres</td><td>5432</td><td>5442</td><td>5452</td></tr>
+          <tr><td>Pooler</td><td>6543</td><td>6553</td><td>6563</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="quickstart">
+  <div class="container">
+    <div class="section-label">Quickstart</div>
+    <h2>Up and running in 30 seconds</h2>
+    <p>Prerequisites: Docker Engine ≥ 24 with the Compose plugin.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h3>Grab the multihead folder</h3>
+          <p>Sparse checkout — no full monorepo clone needed.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h3>Run <code>bash start.sh</code></h3>
+          <p>Auto-generates secrets, detects your OS and Docker bridge IP, starts all services.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h3>Open <code>http://localhost:8000</code></h3>
+          <p>Your multi-head Studio is live. Hit "New project" to spin up a second Supabase stack.</p>
+        </div>
+      </div>
+    </div>
+    <div class="code-wrap">
+<pre><span class="comment"># Fresh install — no existing Supabase needed</span>
+git clone --filter=blob:none --sparse \
+  https://github.com/flamingrubberduck/supabase-studio-multi-head.git
+cd supabase-studio-multi-head
+git sparse-checkout set multihead
+cd multihead &amp;&amp; bash start.sh</pre>
+    </div>
+    <p style="margin-top:16px;font-size:14px;">
+      Already self-hosting Supabase?
+      <a href="https://github.com/flamingrubberduck/supabase-studio-multi-head#readme">See the upgrade guide →</a>
+    </p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="section-label">Who is this for</div>
+    <h2>Built for self-hosters who need more</h2>
+    <ul class="audience-list">
+      <li>Developers running multiple client or side projects on a single server</li>
+      <li>Teams wanting staging + production environments without paying Cloud prices</li>
+      <li>Anyone who wants full ownership of their data with no vendor lock-in</li>
+      <li>Ops engineers who want standby and failover without a managed database service</li>
+    </ul>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="section-label">Comparison</div>
+    <h2>vs. Supabase Cloud &amp; standard self-host</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Feature</th><th>Supabase Cloud</th><th>Standard self-host</th><th>Multi-Head Studio</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Multiple projects</td>
+            <td class="yes">✓ $25+/project</td>
+            <td class="no">Manual only</td>
+            <td class="yes">✓ from UI</td>
+          </tr>
+          <tr>
+            <td>Self-hosted</td>
+            <td class="no">✗</td>
+            <td class="yes">✓</td>
+            <td class="yes">✓</td>
+          </tr>
+          <tr>
+            <td>Single dashboard</td>
+            <td class="yes">✓</td>
+            <td class="no">One per stack</td>
+            <td class="yes">✓</td>
+          </tr>
+          <tr>
+            <td>Standby / failover</td>
+            <td class="yes">✓ Pro plan</td>
+            <td class="no">✗</td>
+            <td class="yes">✓ Pro tier</td>
+          </tr>
+          <tr>
+            <td>Data ownership</td>
+            <td class="no">Vendor hosted</td>
+            <td class="yes">✓</td>
+            <td class="yes">✓</td>
+          </tr>
+          <tr>
+            <td>Monthly cost</td>
+            <td>$25+ per project</td>
+            <td class="yes">Your server only</td>
+            <td class="yes">Your server only</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="pricing">
+  <div class="container">
+    <div class="section-label">Pricing</div>
+    <h2>Free to start. Pay when you need more.</h2>
+    <div class="features">
+      <div class="feature-card">
+        <h3 style="font-size:18px;margin-bottom:8px;">Free</h3>
+        <p style="font-size:28px;font-weight:800;color:var(--text);margin-bottom:16px;">$0</p>
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted);">
+          <li>✓ Unlimited projects</li>
+          <li>✓ Full Supabase Studio UI</li>
+          <li>✓ Import remote stacks</li>
+          <li>✓ Self-hosted, your server</li>
+        </ul>
+      </div>
+      <div class="feature-card" style="border-color:rgba(62,207,142,0.35);">
+        <h3 style="font-size:18px;margin-bottom:8px;">Pro <span style="font-size:11px;font-weight:600;color:var(--green);background:var(--green-dim);padding:2px 8px;border-radius:999px;">Coming soon</span></h3>
+        <p style="font-size:28px;font-weight:800;color:var(--text);margin-bottom:16px;">TBA</p>
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted);">
+          <li>✓ Everything in Free</li>
+          <li>✓ Warm standby provisioning</li>
+          <li>✓ One-click failover</li>
+          <li>✓ WAL streaming replication</li>
+          <li>✓ Read replica cluster mode</li>
+          <li>✓ Priority support</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="cta-bottom">
+  <div class="container">
+    <h2>Ready to try it?</h2>
+    <p>One command. No cloud account. Full control.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#quickstart">Get started free →</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p>
+      Not affiliated with Supabase Inc.
+      &nbsp;·&nbsp;
+      <a href="https://github.com/flamingrubberduck/supabase-studio-multi-head">GitHub</a>
+      &nbsp;·&nbsp;
+      <a href="https://github.com/flamingrubberduck/supabase-studio-multi-head/blob/master/LICENSE">License</a>
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>
