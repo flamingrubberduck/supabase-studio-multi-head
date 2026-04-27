@@ -1,9 +1,9 @@
 import { keepPreviousData } from '@tanstack/react-query'
 import { useDebounce } from '@uidotdev/usehooks'
 import { LOCAL_STORAGE_KEYS, useParams } from 'common'
-import { Grid, List, Loader2, Plus, Search, X } from 'lucide-react'
+import { Grid, List, Loader2, Plus, Search, ShieldCheck, X } from 'lucide-react'
 import Link from 'next/link'
-import { parseAsArrayOf, parseAsString, parseAsStringLiteral, useQueryState } from 'nuqs'
+import { parseAsArrayOf, parseAsBoolean, parseAsString, parseAsStringLiteral, useQueryState } from 'nuqs'
 import { useEffect } from 'react'
 import { Button, ToggleGroup, ToggleGroupItem } from 'ui'
 import { Input } from 'ui-patterns/DataInputs/Input'
@@ -17,7 +17,7 @@ import {
 import { useOrgProjectsInfiniteQuery } from '@/data/projects/org-projects-infinite-query'
 import { useIsFeatureEnabled } from '@/hooks/misc/useIsFeatureEnabled'
 import { useLocalStorageQuery } from '@/hooks/misc/useLocalStorage'
-import { PROJECT_STATUS } from '@/lib/constants'
+import { IS_PLATFORM, PROJECT_STATUS } from '@/lib/constants'
 
 interface HomePageActionsProps {
   slug?: string
@@ -34,6 +34,10 @@ export const HomePageActions = ({ slug: _slug, hideNewProject = false }: HomePag
   const [filterStatus, setFilterStatus] = useQueryState(
     'status',
     parseAsArrayOf(parseAsString, ',').withDefault([])
+  )
+  const [includeStandby, setIncludeStandby] = useQueryState(
+    'standby',
+    parseAsBoolean.withDefault(false)
   )
   const [sort, setSort] = useQueryState(
     'sort',
@@ -53,6 +57,7 @@ export const HomePageActions = ({ slug: _slug, hideNewProject = false }: HomePag
       sort,
       search: search.length === 0 ? search : debouncedSearch,
       statuses: filterStatus,
+      includeStandby,
     },
     { placeholderData: keepPreviousData }
   )
@@ -102,6 +107,17 @@ export const HomePageActions = ({ slug: _slug, hideNewProject = false }: HomePag
             labelKey="label"
             onSaveFilters={(options) => setFilterStatusStorage(options)}
           />
+
+          {!IS_PLATFORM && (
+            <Button
+              type={includeStandby ? 'default' : 'outline'}
+              size="tiny"
+              icon={<ShieldCheck size={12} />}
+              onClick={() => setIncludeStandby(!includeStandby)}
+            >
+              Standbys
+            </Button>
+          )}
 
           <SortDropdown
             options={[

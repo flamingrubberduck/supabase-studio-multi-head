@@ -50,7 +50,11 @@ export const ProjectCard = ({
   const providerLabel =
     project.cloud_provider === 'AWS_NIMBUS' ? infraAwsNimbusLabel : project.cloud_provider
 
-  const desc = `${providerLabel} | ${project.region}`
+  const desc = isStandby
+    ? primaryName
+      ? `Standby for ${primaryName}`
+      : 'Standby stack'
+    : `${providerLabel} | ${project.region}`
 
   const { projectHomepageShowInstanceSize } = useIsFeatureEnabled([
     'project_homepage:show_instance_size',
@@ -61,6 +65,11 @@ export const ProjectCard = ({
   const isVercelIntegrated = vercelIntegration !== undefined
   const githubRepository = githubIntegration?.metadata.name ?? undefined
   const projectStatus = inferProjectStatus(project.status)
+
+  // Failover fields — added by self-hosted multi-head, absent on cloud
+  const p = project as typeof project & { role?: string; primary_name?: string }
+  const isStandby = p.role === 'standby'
+  const primaryName = p.primary_name
 
   return (
     <>
@@ -78,6 +87,11 @@ export const ProjectCard = ({
                     {isDefaultProject && (
                       <Badge variant="default" className="shrink-0 text-[10px] leading-none py-0.5 px-1.5">
                         Default
+                      </Badge>
+                    )}
+                    {isStandby && (
+                      <Badge variant="warning" className="shrink-0 text-[10px] leading-none py-0.5 px-1.5">
+                        Standby
                       </Badge>
                     )}
                   </div>

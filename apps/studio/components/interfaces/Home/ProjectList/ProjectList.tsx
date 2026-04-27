@@ -1,7 +1,7 @@
 import { keepPreviousData } from '@tanstack/react-query'
 import { useDebounce } from '@uidotdev/usehooks'
 import { LOCAL_STORAGE_KEYS, useParams } from 'common'
-import { parseAsArrayOf, parseAsString, parseAsStringLiteral, useQueryState } from 'nuqs'
+import { parseAsArrayOf, parseAsBoolean, parseAsString, parseAsStringLiteral, useQueryState } from 'nuqs'
 import { useMemo } from 'react'
 import {
   Card,
@@ -55,6 +55,7 @@ export const ProjectList = ({ organization: organization_, rewriteHref }: Projec
     'status',
     parseAsArrayOf(parseAsString, ',').withDefault([])
   )
+  const [includeStandby] = useQueryState('standby', parseAsBoolean.withDefault(false))
   const [sort, setSort] = useQueryState(
     'sort',
     parseAsStringLiteral(PROJECT_LIST_SORT_VALUES).withDefault('name_asc')
@@ -79,6 +80,7 @@ export const ProjectList = ({ organization: organization_, rewriteHref }: Projec
       sort,
       search: search.length === 0 ? search : debouncedSearch,
       statuses: filterStatus,
+      includeStandby,
     },
     {
       placeholderData: keepPreviousData,

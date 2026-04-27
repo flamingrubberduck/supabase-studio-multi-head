@@ -46,6 +46,14 @@ export interface StoredProject {
   db_port?: number
   db_user?: string
   db_name?: string
+
+  // Failover fields
+  role?: 'primary' | 'standby'
+  standby_ref?: string
+  primary_ref?: string
+  failure_streak?: number
+  failover_count?: number
+  last_failover_at?: string
 }
 
 const DATA_DIR =
@@ -250,4 +258,10 @@ export function updateStoredProjectField<K extends keyof StoredProject>(
 export function deleteStoredProject(ref: string): void {
   const existing = readFromDisk()
   writeToDisk(existing.filter((p) => p.ref !== ref))
+}
+
+export function updateProjectFields(ref: string, patch: Partial<StoredProject>): void {
+  const existing = readFromDisk()
+  const updated = existing.map((p) => (p.ref === ref ? { ...p, ...patch } : p))
+  writeToDisk(updated)
 }

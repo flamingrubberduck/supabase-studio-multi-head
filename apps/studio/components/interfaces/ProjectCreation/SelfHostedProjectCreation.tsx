@@ -1,8 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { ShieldCheck } from 'lucide-react'
 import { useRouter } from 'next/router'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
-import { Button, Form_Shadcn_, FormControl_Shadcn_, FormField_Shadcn_ } from 'ui'
+import { Button, Form_Shadcn_, FormControl_Shadcn_, FormField_Shadcn_, Switch } from 'ui'
 import { Input } from 'ui-patterns/DataInputs/Input'
 import { FormItemLayout } from 'ui-patterns/form/FormItemLayout/FormItemLayout'
 import { z } from 'zod'
@@ -24,6 +26,8 @@ type FormValues = z.infer<typeof schema>
 export function SelfHostedProjectCreation() {
   const router = useRouter()
   const { data: currentOrg } = useSelectedOrganizationQuery()
+  const [withStandby, setWithStandby] = useState(false)
+  const [isProvisioningStandby, setIsProvisioningStandby] = useState(false)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -31,22 +35,39 @@ export function SelfHostedProjectCreation() {
     defaultValues: { projectName: '' },
   })
 
-  const { mutate: createProject, isPending } = useProjectCreateMutation({
-    onSuccess: (res) => {
-      router.push(`/project/${res.ref}`)
-    },
-    onError: (err) => {
-      toast.error(`Failed to create project: ${err.message}`)
-    },
-  })
+  const { mutateAsync: createProjectAsync, isPending: isCreating } = useProjectCreateMutation()
+  const isPending = isCreating || isProvisioningStandby
 
-  const onSubmit = ({ projectName }: FormValues) => {
+  const onSubmit = async ({ projectName }: FormValues) => {
     if (!currentOrg) return toast.error('No organization selected')
-    createProject({
-      name: projectName,
-      organizationSlug: currentOrg.slug,
-      dbPass: '', // credentials are auto-generated server-side
-    })
+
+    let project: { ref: string } | undefined
+    try {
+      project = await createProjectAsync({
+        name: projectName,
+        organizationSlug: currentOrg.slug,
+        dbPass: '',
+      })
+    } catch (err) {
+      toast.error(`Failed to create project: ${err instanceof Error ? err.message : String(err)}`)
+      return
+    }
+
+    if (!project) return
+
+    if (withStandby) {
+      setIsProvisioningStandby(true)
+      try {
+        const res = await fetch(`/api/platform/projects/${project.ref}/standby`, { method: 'POST' })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      } catch {
+        toast.warning('Project created — standby could not be provisioned. Add it from Settings › General.')
+      } finally {
+        setIsProvisioningStandby(false)
+      }
+    }
+
+    router.push(`/project/${project.ref}`)
   }
 
   return (
@@ -68,12 +89,16 @@ export function SelfHostedProjectCreation() {
                 Cancel
               </Button>
               <Button htmlType="submit" loading={isPending} disabled={isPending}>
-                {isPending ? 'Launching stack...' : 'Create project'}
+                {isProvisioningStandby
+                  ? 'Provisioning standby...'
+                  : isCreating
+                    ? 'Launching stack...'
+                    : 'Create project'}
               </Button>
             </div>
           }
         >
-          <Panel.Content>
+          <Panel.Content className="space-y-4">
             <FormField_Shadcn_
               control={form.control}
               name="projectName"
@@ -89,6 +114,23 @@ export function SelfHostedProjectCreation() {
                 </FormItemLayout>
               )}
             />
+
+            <FormItemLayout
+              label={
+                <span className="flex items-center gap-1.5">
+                  <ShieldCheck size={14} className="text-foreground-light" />
+                  Launch with failover standby
+                </span>
+              }
+              layout="horizontal"
+              description="A warm standby stack will be provisioned automatically. Studio will fail over in ~90 s if the primary becomes unavailable."
+            >
+              <Switch
+                checked={withStandby}
+                onCheckedChange={setWithStandby}
+                disabled={isPending}
+              />
+            </FormItemLayout>
           </Panel.Content>
         </Panel>
       </form>
