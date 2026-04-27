@@ -1,6 +1,7 @@
 import { getStoredProjects, updateProjectFields } from './projectsStore'
 import { triggerFailover } from './failoverManager'
 import { triggerClusterFailover } from './clusterManager'
+import { getLicenseTier } from './licenseManager'
 
 const POLL_INTERVAL_MS = 30_000
 const FAILURE_THRESHOLD = 3
@@ -59,7 +60,9 @@ async function pollOnce(): Promise<void> {
       // Reset streak before triggering so a re-entry of pollOnce doesn't double-trigger
       updateProjectFields(project.ref, { failure_streak: 0 })
 
-      if (project.cluster_id) {
+      if (getLicenseTier() !== 'pro') {
+        console.warn(`[failover] ${project.name} (${project.ref}) is down but auto-failover requires a Pro license.`)
+      } else if (project.cluster_id) {
         triggerClusterFailover(project.ref).catch((err) => {
           console.error(`[cluster] triggerClusterFailover failed for ${project.ref}:`, err)
         })

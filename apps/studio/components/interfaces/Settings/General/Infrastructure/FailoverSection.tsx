@@ -18,6 +18,8 @@ import {
   useFailoverMutation,
   useProvisionStandbyMutation,
 } from '@/data/projects/project-standby-mutation'
+import { useLicenseQuery } from '@/data/misc/license-query'
+import { ProUpgradePrompt } from '@/components/interfaces/ProUpgradePrompt'
 import { useSelectedProjectQuery } from '@/hooks/misc/useSelectedProject'
 
 // Fields added by multi-head that are not in the upstream OpenAPI types
@@ -32,6 +34,8 @@ type FailoverProject = {
 export function FailoverSection() {
   const { data: _project } = useSelectedProjectQuery()
   const project = _project as unknown as FailoverProject | undefined
+  const { data: license } = useLicenseQuery()
+  const isPro = license?.tier === 'pro'
 
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [confirmFailover, setConfirmFailover] = useState(false)
@@ -119,7 +123,9 @@ export function FailoverSection() {
                 </div>
 
                 <div className="flex gap-2 shrink-0">
-                  {hasStandby ? (
+                  {!isPro ? (
+                    <ProUpgradePrompt featureName="Failover standby" />
+                  ) : hasStandby ? (
                     <>
                       <Button
                         type="warning"

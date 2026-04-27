@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 
 import apiWrapper from '@/lib/api/apiWrapper'
+import { requirePro } from '@/lib/api/self-hosted/licenseManager'
 import { provisionStandby, triggerFailover } from '@/lib/api/self-hosted/failoverManager'
 import {
   deleteStoredProject,
@@ -38,6 +39,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
  *   a different machine than the primary. Omit to use the same host as the primary.
  */
 async function handleProvision(primaryRef: string, res: NextApiResponse, req: NextApiRequest) {
+  const license = requirePro()
+  if (!license.ok) return res.status(402).json({ data: null, error: { message: license.message } })
+
   const project = getStoredProjectByRef(primaryRef)
   if (!project) {
     return res.status(404).json({ data: null, error: { message: 'Project not found' } })

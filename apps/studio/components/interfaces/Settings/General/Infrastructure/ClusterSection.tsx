@@ -18,6 +18,8 @@ import {
   useDeprovisionReplicaMutation,
   useProvisionReplicaMutation,
 } from '@/data/projects/project-replica-mutation'
+import { useLicenseQuery } from '@/data/misc/license-query'
+import { ProUpgradePrompt } from '@/components/interfaces/ProUpgradePrompt'
 import { useSelectedProjectQuery } from '@/hooks/misc/useSelectedProject'
 
 // Fields added by multi-head that are not in the upstream OpenAPI types
@@ -45,6 +47,9 @@ export function ClusterSection() {
   const [removingRef, setRemovingRef] = useState<string | null>(null)
   const [addDockerHost, setAddDockerHost] = useState('')
   const [showAddForm, setShowAddForm] = useState(false)
+
+  const { data: license } = useLicenseQuery()
+  const isPro = license?.tier === 'pro'
 
   const ref = project?.ref ?? ''
   const replicas: ReplicaEntry[] = (project as any)?.replicas ?? []
@@ -155,7 +160,7 @@ export function ClusterSection() {
                               type="text"
                               icon={<Trash size={14} />}
                               onClick={() => setRemovingRef(r.ref)}
-                              disabled={isBusy}
+                              disabled={isBusy || !isPro}
                             />
                           </td>
                         </tr>
@@ -166,8 +171,10 @@ export function ClusterSection() {
             </CardContent>
           </Card>
 
-          {/* Add replica form */}
-          {showAddForm ? (
+          {/* Add replica / failover controls */}
+          {!isPro ? (
+            <ProUpgradePrompt featureName="Cluster mode" />
+          ) : showAddForm ? (
             <div className="flex items-center gap-2">
               <Input_Shadcn_
                 className="h-8 text-sm font-mono"

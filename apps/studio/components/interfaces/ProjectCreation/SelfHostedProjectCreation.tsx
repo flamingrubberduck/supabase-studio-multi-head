@@ -11,6 +11,7 @@ import { z } from 'zod'
 
 import Panel from '@/components/ui/Panel'
 import { useProjectCreateMutation } from '@/data/projects/project-create-mutation'
+import { useLicenseQuery } from '@/data/misc/license-query'
 import { useSelectedOrganizationQuery } from '@/hooks/misc/useSelectedOrganization'
 
 type DeployMode = 'standalone' | 'standby' | 'cluster'
@@ -62,9 +63,13 @@ const DEPLOY_MODES: { value: DeployMode; label: string; description: string; ico
   },
 ]
 
+const PRO_MODES: DeployMode[] = ['standby', 'cluster']
+
 export function SelfHostedProjectCreation() {
   const router = useRouter()
   const { data: currentOrg } = useSelectedOrganizationQuery()
+  const { data: license } = useLicenseQuery()
+  const isPro = license?.tier === 'pro'
   const [deployMode, setDeployMode] = useState<DeployMode>('standalone')
   const [isPostCreate, setIsPostCreate] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -175,26 +180,40 @@ export function SelfHostedProjectCreation() {
               description="Choose how this project is deployed."
             >
               <div className="flex flex-col gap-2 w-full">
-                {DEPLOY_MODES.map((mode) => (
-                  <button
-                    key={mode.value}
-                    type="button"
-                    disabled={isPending}
-                    onClick={() => setDeployMode(mode.value)}
-                    className={[
-                      'flex items-start gap-3 rounded-md border px-3 py-2.5 text-left transition-colors',
-                      deployMode === mode.value
-                        ? 'border-brand bg-brand-200 text-foreground'
-                        : 'border-border-strong bg-surface-100 text-foreground-light hover:border-foreground-muted',
-                    ].join(' ')}
-                  >
-                    <span className="mt-0.5 shrink-0">{mode.icon}</span>
-                    <span>
-                      <span className="block text-sm font-medium">{mode.label}</span>
-                      <span className="block text-xs text-foreground-light">{mode.description}</span>
-                    </span>
-                  </button>
-                ))}
+                {DEPLOY_MODES.map((mode) => {
+                  const isProMode = PRO_MODES.includes(mode.value)
+                  const isLocked = isProMode && !isPro
+                  return (
+                    <button
+                      key={mode.value}
+                      type="button"
+                      disabled={isPending || isLocked}
+                      onClick={() => !isLocked && setDeployMode(mode.value)}
+                      title={isLocked ? 'Requires Pro license' : undefined}
+                      className={[
+                        'flex items-start gap-3 rounded-md border px-3 py-2.5 text-left transition-colors',
+                        isLocked
+                          ? 'border-border-muted bg-surface-75 text-foreground-muted cursor-not-allowed opacity-60'
+                          : deployMode === mode.value
+                            ? 'border-brand bg-brand-200 text-foreground'
+                            : 'border-border-strong bg-surface-100 text-foreground-light hover:border-foreground-muted',
+                      ].join(' ')}
+                    >
+                      <span className="mt-0.5 shrink-0">{mode.icon}</span>
+                      <span className="flex-1">
+                        <span className="flex items-center gap-2 text-sm font-medium">
+                          {mode.label}
+                          {isLocked && (
+                            <span className="inline-flex items-center rounded-sm bg-surface-300 px-1.5 py-0.5 text-[10px] font-medium text-foreground-muted">
+                              Pro
+                            </span>
+                          )}
+                        </span>
+                        <span className="block text-xs text-foreground-light">{mode.description}</span>
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
             </FormItemLayout>
 
