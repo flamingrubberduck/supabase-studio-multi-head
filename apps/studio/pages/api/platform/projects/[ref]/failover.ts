@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 
 import apiWrapper from '@/lib/api/apiWrapper'
+import { requirePro } from '@/lib/api/self-hosted/licenseManager'
 import { triggerFailover } from '@/lib/api/self-hosted/failoverManager'
 import { getStoredProjectByRef } from '@/lib/api/self-hosted/projectsStore'
 
@@ -24,6 +25,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   const ref = req.query.ref as string
+
+  const license = requirePro()
+  if (!license.ok) return res.status(402).json({ data: null, error: { message: license.message } })
 
   const project = getStoredProjectByRef(ref)
   if (!project) {

@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 
 import apiWrapper from '@/lib/api/apiWrapper'
+import { requirePro } from '@/lib/api/self-hosted/licenseManager'
 import { provisionReplica, deprovisionReplica } from '@/lib/api/self-hosted/clusterManager'
 import { getStoredProjectByRef } from '@/lib/api/self-hosted/projectsStore'
 
@@ -27,6 +28,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
  * Optional body: { docker_host?: string }
  */
 async function handleProvision(masterRef: string, req: NextApiRequest, res: NextApiResponse) {
+  const license = requirePro()
+  if (!license.ok) return res.status(402).json({ data: null, error: { message: license.message } })
+
   const project = getStoredProjectByRef(masterRef)
   if (!project) {
     return res.status(404).json({ data: null, error: { message: 'Project not found' } })
