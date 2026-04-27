@@ -58,7 +58,7 @@ const handleDelete = async (req: NextApiRequest, res: NextApiResponse) => {
 
   // Tear down the Docker stack in the background — don't block the response
   if (project.docker_project) {
-    teardownProjectStack(ref, project.docker_project).catch((err: unknown) => {
+    teardownProjectStack(ref, project.docker_project, project.docker_host).catch((err: unknown) => {
       console.error(
         `[multi-head] Stack teardown failed for ${ref}: ${err instanceof Error ? err.message : err}`
       )

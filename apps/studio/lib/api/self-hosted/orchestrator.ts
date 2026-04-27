@@ -66,6 +66,46 @@ const DEFAULT_POOLER_PORT = parseInt(process.env.POOLER_PROXY_PORT_TRANSACTION |
 const PORT_INCREMENT = 10
 
 // ────────────────────────────────────────────────────────────
+// Docker host helpers
+// ────────────────────────────────────────────────────────────
+
+/**
+ * Extracts the hostname from a DOCKER_HOST URL for use in public URLs and
+ * cross-host replication peer addresses.
+ *
+ * "ssh://user@192.168.1.10" → "192.168.1.10"
+ * "tcp://remote-host:2376"  → "remote-host"
+ * undefined                 → MULTI_HEAD_HOST env var ("localhost" by default)
+ */
+export function extractDockerHostname(dockerHost?: string): string {
+  if (!dockerHost) return MULTI_HEAD_HOST
+  try {
+    return new URL(dockerHost).hostname || MULTI_HEAD_HOST
+  } catch {
+    return MULTI_HEAD_HOST
+  }
+}
+
+/**
+ * Returns a minimal safe environment for docker CLI calls, optionally
+ * overriding DOCKER_HOST to target a remote daemon.
+ *
+ * Strips all Supabase-specific vars so they don't shadow per-project
+ * --env-file values when launching stacks.
+ */
+function buildDockerEnv(dockerHost?: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {}
+  for (const key of [
+    'PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TERM', 'TMPDIR', 'TMP', 'TEMP',
+    'XDG_RUNTIME_DIR', 'DOCKER_HOST', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH', 'DOCKER_BUILDKIT',
+  ]) {
+    if (process.env[key] !== undefined) env[key] = process.env[key]
+  }
+  if (dockerHost) env['DOCKER_HOST'] = dockerHost
+  return env
+}
+
+// ────────────────────────────────────────────────────────────
 // JWT generation (no jsonwebtoken dependency — pure crypto)
 // ────────────────────────────────────────────────────────────
 
@@ -321,6 +361,7 @@ export interface LaunchOptions {
   name: string
   ports: PortAllocation
   credentials: ProjectCredentials
+  docker_host?: string
 }
 
 /**
@@ -335,7 +376,7 @@ export interface LaunchOptions {
  * the default pg-meta can decrypt x-connection-encrypted headers for this project).
  */
 export async function launchProjectStack(opts: LaunchOptions): Promise<string> {
-  const { ref, name, ports, credentials } = opts
+  const { ref, name, ports, credentials, docker_host } = opts
 
   const pgMetaCryptoKey = process.env.PG_META_CRYPTO_KEY
   if (!pgMetaCryptoKey) {
@@ -350,7 +391,8 @@ export async function launchProjectStack(opts: LaunchOptions): Promise<string> {
   const stackDir = path.join(STACKS_DIR, ref)
   fs.mkdirSync(stackDir, { recursive: true })
 
-  const publicUrl = `http://${MULTI_HEAD_HOST}:${ports.kongHttpPort}`
+  const hostname = extractDockerHostname(docker_host)
+  const publicUrl = `http://${hostname}:${ports.kongHttpPort}`
 
   const envContent = [
     `# Auto-generated — project: ${name}  ref: ${ref}`,
@@ -431,15 +473,11 @@ export async function launchProjectStack(opts: LaunchOptions): Promise<string> {
   // POOLER_PROXY_PORT_TRANSACTION, POSTGRES_PASSWORD, …) don't shadow the per-project
   // values supplied via --env-file. Docker Compose gives shell env priority over
   // --env-file, so we strip all Supabase-specific vars and keep only OS essentials.
-  const safeEnv: NodeJS.ProcessEnv = {}
-  for (const key of ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TERM', 'TMPDIR', 'TMP', 'TEMP', 'XDG_RUNTIME_DIR', 'DOCKER_HOST', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH', 'DOCKER_BUILDKIT']) {
-    if (process.env[key] !== undefined) safeEnv[key] = process.env[key]
-  }
-
+  // docker_host overrides DOCKER_HOST to target a remote daemon when set.
   const result = spawnSync(
     'docker',
     ['compose', '-p', projectName, '--env-file', envFile, '-f', composeFile, 'up', '-d', '--remove-orphans'],
-    { encoding: 'utf-8', timeout: 180_000, stdio: 'pipe', env: safeEnv }
+    { encoding: 'utf-8', timeout: 180_000, stdio: 'pipe', env: buildDockerEnv(docker_host) }
   )
   if (result.error) throw result.error
   if (result.status !== 0) {
@@ -486,9 +524,14 @@ export async function waitForProjectHealth(
  * Stops and removes a Docker Compose stack (containers + named volumes).
  * The project's stack .env file in DATA_DIR/stacks/{ref}/ is also removed.
  *
+ * Pass docker_host to target a remote daemon (same value stored on the project).
  * Errors are swallowed so a missing / already-stopped stack doesn't fail deletion.
  */
-export async function teardownProjectStack(ref: string, dockerProject: string): Promise<void> {
+export async function teardownProjectStack(
+  ref: string,
+  dockerProject: string,
+  docker_host?: string
+): Promise<void> {
   const composeFile = MULTI_HEAD_COMPOSE_FILE
   const stackDir = path.join(STACKS_DIR, ref)
   const envFile = path.join(stackDir, '.env')
@@ -499,7 +542,7 @@ export async function teardownProjectStack(ref: string, dockerProject: string): 
     if (fs.existsSync(envFile)) args.push('--env-file', envFile)
     args.push('down', '--volumes', '--remove-orphans')
 
-    spawnSync('docker', args, { encoding: 'utf-8', timeout: 120_000, stdio: 'pipe' })
+    spawnSync('docker', args, { encoding: 'utf-8', timeout: 120_000, stdio: 'pipe', env: buildDockerEnv(docker_host) })
   } catch {
     // best-effort — don't block deletion if docker is unreachable
   }

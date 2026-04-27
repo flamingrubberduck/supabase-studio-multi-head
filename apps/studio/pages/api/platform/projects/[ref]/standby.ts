@@ -17,7 +17,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   switch (req.method) {
     case 'POST':
-      return handleProvision(ref, res)
+      return handleProvision(ref, res, req)
     case 'DELETE':
       return handleDeprovision(ref, res)
     default:
@@ -32,8 +32,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
  * Provisions a warm standby stack for this project. The standby inherits
  * the primary's JWT credentials so tokens remain valid after a failover.
  * Returns immediately; standby transitions COMING_UP → ACTIVE_HEALTHY asynchronously.
+ *
+ * Optional body: { docker_host?: string }
+ *   Pass a Docker host URL (e.g. "ssh://user@host") to provision the standby on
+ *   a different machine than the primary. Omit to use the same host as the primary.
  */
-async function handleProvision(primaryRef: string, res: NextApiResponse) {
+async function handleProvision(primaryRef: string, res: NextApiResponse, req: NextApiRequest) {
   const project = getStoredProjectByRef(primaryRef)
   if (!project) {
     return res.status(404).json({ data: null, error: { message: 'Project not found' } })
@@ -48,9 +52,11 @@ async function handleProvision(primaryRef: string, res: NextApiResponse) {
     })
   }
 
+  const docker_host = typeof req.body?.docker_host === 'string' ? req.body.docker_host : undefined
+
   let standbyRef: string
   try {
-    standbyRef = await provisionStandby(primaryRef)
+    standbyRef = await provisionStandby(primaryRef, docker_host)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     return res.status(500).json({ data: null, error: { message } })
@@ -88,7 +94,7 @@ async function handleDeprovision(primaryRef: string, res: NextApiResponse) {
   if (standby) {
     deleteStoredProject(standby.ref)
     if (standby.docker_project) {
-      teardownProjectStack(standby.ref, standby.docker_project).catch((err) =>
+      teardownProjectStack(standby.ref, standby.docker_project, standby.docker_host).catch((err) =>
         console.warn(`[failover] Standby teardown failed for ${standby.ref}:`, err)
       )
     }

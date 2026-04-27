@@ -39,6 +39,7 @@ export type ProjectCreateVariables = {
     service_key?: string
     jwt_secret?: string
     public_url?: string
+    docker_host?: string
   }
 }
 
