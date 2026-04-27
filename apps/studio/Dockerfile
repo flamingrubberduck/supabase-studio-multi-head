@@ -52,6 +52,7 @@ CMD ["pnpm", "dev:studio"]
 # Compile Next.js
 FROM dev AS builder
 
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN pnpm --filter studio exec next build
 
 # Locate the Docker Compose plugin — its path varies across docker:cli versions.
