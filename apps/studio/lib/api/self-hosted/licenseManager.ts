@@ -1,17 +1,54 @@
 import crypto from 'node:crypto'
+import fs from 'node:fs'
+import path from 'node:path'
 
 export type LicenseTier = 'free' | 'pro'
 
 // ── In-process state ─────────────────────────────────────────────────────────
 
 let currentTier: LicenseTier = 'free'
-let graceDeadline = 0          // epoch ms — 0 means no grace active
-let inGrace = false            // true while server is unreachable but grace hasn't expired
+let graceDeadline = 0
+let inGrace = false
+let activeLicenseKey: string | null = null
+let pollingInterval: ReturnType<typeof setInterval> | null = null
 
-const GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000  // 7 days
-const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000       // re-check every 6 hours
+const GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000
+const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
 
-// ── JWT helpers (no external dependency) ─────────────────────────────────────
+// ── Persistence ───────────────────────────────────────────────────────────────
+
+const DATA_DIR = process.env.STUDIO_DATA_DIR || path.join(process.cwd(), '.studio-data')
+const LICENSE_FILE = path.join(DATA_DIR, 'license.json')
+
+function readPersistedKey(): string | null {
+  try {
+    if (!fs.existsSync(LICENSE_FILE)) return null
+    const raw = fs.readFileSync(LICENSE_FILE, 'utf-8')
+    const parsed = JSON.parse(raw) as { key?: string }
+    return parsed.key || null
+  } catch {
+    return null
+  }
+}
+
+function persistKey(key: string): void {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true })
+    fs.writeFileSync(LICENSE_FILE, JSON.stringify({ key }), 'utf-8')
+  } catch (err) {
+    console.warn('[license] Failed to persist license key:', err)
+  }
+}
+
+function clearPersistedKey(): void {
+  try {
+    if (fs.existsSync(LICENSE_FILE)) fs.unlinkSync(LICENSE_FILE)
+  } catch {
+    // non-fatal
+  }
+}
+
+// ── JWT helpers ───────────────────────────────────────────────────────────────
 
 function base64urlDecode(s: string): string {
   return Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8')
@@ -21,13 +58,10 @@ interface LicensePayload {
   tier?: string
   email?: string
   issued_to?: string
+  license_id?: string
   iat?: number
 }
 
-/**
- * Verifies an HS256 JWT against secret and returns the decoded payload,
- * or null if the signature is invalid or the token is malformed.
- */
 function verifyJwt(token: string, secret: string): LicensePayload | null {
   try {
     const parts = token.split('.')
@@ -44,12 +78,11 @@ function verifyJwt(token: string, secret: string): LicensePayload | null {
   }
 }
 
-// ── License server check ─────────────────────────────────────────────────────
+// ── License server check ──────────────────────────────────────────────────────
 
-async function checkLicenseServer(): Promise<void> {
-  const key = process.env.MULTI_HEAD_LICENSE_KEY
+async function checkLicenseServer(key: string): Promise<void> {
   const serverUrl = process.env.MULTI_HEAD_LICENSE_SERVER_URL
-  if (!key || !serverUrl) return
+  if (!serverUrl) return
 
   try {
     const res = await fetch(
@@ -63,7 +96,7 @@ async function checkLicenseServer(): Promise<void> {
       return
     }
 
-    const body = await res.json() as { active?: boolean }
+    const body = (await res.json()) as { active?: boolean }
 
     if (body.active === true) {
       currentTier = 'pro'
@@ -74,6 +107,8 @@ async function checkLicenseServer(): Promise<void> {
       currentTier = 'free'
       graceDeadline = 0
       inGrace = false
+      activeLicenseKey = null
+      clearPersistedKey()
       console.warn('[license] License revoked by server — downgrading to Free tier.')
     }
   } catch {
@@ -83,17 +118,28 @@ async function checkLicenseServer(): Promise<void> {
 
 function applyUnreachable(): void {
   if (graceDeadline > 0 && Date.now() < graceDeadline) {
-    // Still within grace — keep current tier
     inGrace = true
     const daysLeft = Math.ceil((graceDeadline - Date.now()) / (24 * 60 * 60 * 1000))
-    console.warn(`[license] License server unreachable — grace period active (${daysLeft}d remaining). Keeping ${currentTier} tier.`)
+    console.warn(
+      `[license] License server unreachable — grace period active (${daysLeft}d remaining). Keeping ${currentTier} tier.`
+    )
   } else {
     inGrace = false
     if (currentTier === 'pro') {
       currentTier = 'free'
-      console.warn('[license] License server unreachable and grace period expired — downgrading to Free tier.')
+      console.warn(
+        '[license] License server unreachable and grace period expired — downgrading to Free tier.'
+      )
     }
   }
+}
+
+// ── Internal: start polling ───────────────────────────────────────────────────
+
+function startPolling(key: string): void {
+  if (pollingInterval) clearInterval(pollingInterval)
+  checkLicenseServer(key).catch(console.error)
+  pollingInterval = setInterval(() => checkLicenseServer(key).catch(console.error), CHECK_INTERVAL_MS)
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -102,18 +148,67 @@ export function getLicenseTier(): LicenseTier {
   return currentTier
 }
 
-export function getLicenseStatus(): { tier: LicenseTier; grace: boolean } {
-  return { tier: currentTier, grace: inGrace }
+export function getLicenseStatus(): { tier: LicenseTier; grace: boolean; email?: string } {
+  let email: string | undefined
+  if (activeLicenseKey) {
+    const secret = process.env.MULTI_HEAD_LICENSE_SECRET
+    if (secret) {
+      const payload = verifyJwt(activeLicenseKey, secret)
+      email = payload?.email ?? payload?.issued_to
+    }
+  }
+  return { tier: currentTier, grace: inGrace, ...(email ? { email } : {}) }
 }
 
-/** Returns { ok: true } for pro tier, { ok: false, message } for free tier. */
 export function requirePro(): { ok: boolean; message?: string } {
   if (currentTier === 'pro') return { ok: true }
   return {
     ok: false,
     message:
-      'This feature requires a Pro license. Set MULTI_HEAD_LICENSE_KEY in your .env and restart Studio.',
+      'This feature requires a Pro license. Add your license key in Organization Settings → License.',
   }
+}
+
+/**
+ * Activates a license key at runtime (called from the dashboard settings UI).
+ * Returns an error string on failure, null on success.
+ */
+export async function activateLicenseKey(key: string): Promise<string | null> {
+  const secret = process.env.MULTI_HEAD_LICENSE_SECRET
+  if (!secret) {
+    return 'MULTI_HEAD_LICENSE_SECRET is not configured on this server.'
+  }
+
+  const payload = verifyJwt(key, secret)
+  if (!payload) return 'Invalid license key — signature verification failed.'
+  if (payload.tier !== 'pro') return `License tier "${payload.tier}" does not include Pro features.`
+
+  activeLicenseKey = key
+  currentTier = 'pro'
+  persistKey(key)
+
+  console.log(
+    `[license] Key activated via dashboard (issued to: ${payload.email ?? payload.issued_to ?? 'unknown'}).`
+  )
+
+  startPolling(key)
+  return null
+}
+
+/**
+ * Removes the active license key and downgrades to Free tier.
+ */
+export function deactivateLicense(): void {
+  if (pollingInterval) {
+    clearInterval(pollingInterval)
+    pollingInterval = null
+  }
+  activeLicenseKey = null
+  currentTier = 'free'
+  graceDeadline = 0
+  inGrace = false
+  clearPersistedKey()
+  console.log('[license] License deactivated — running as Free tier.')
 }
 
 declare global {
@@ -123,23 +218,21 @@ declare global {
 
 /**
  * Called once from instrumentation.ts on server start.
- * Validates the key locally, then kicks off a background server check
- * and schedules re-checks every 6 hours.
+ * Priority order: MULTI_HEAD_LICENSE_KEY env var > persisted license.json key.
  */
 export function initLicense(): void {
   if (globalThis.__licenseInitialized) return
   globalThis.__licenseInitialized = true
 
-  const key = process.env.MULTI_HEAD_LICENSE_KEY
   const secret = process.env.MULTI_HEAD_LICENSE_SECRET
-
-  if (!key) {
-    console.log('[license] No MULTI_HEAD_LICENSE_KEY — running as Free tier.')
+  if (!secret) {
+    console.warn('[license] MULTI_HEAD_LICENSE_SECRET not set — running as Free tier.')
     return
   }
 
-  if (!secret) {
-    console.warn('[license] MULTI_HEAD_LICENSE_SECRET not set — cannot verify key. Running as Free tier.')
+  const key = process.env.MULTI_HEAD_LICENSE_KEY || readPersistedKey()
+  if (!key) {
+    console.log('[license] No license key found — running as Free tier.')
     return
   }
 
@@ -154,11 +247,10 @@ export function initLicense(): void {
     return
   }
 
-  // Signature valid and tier is pro — optimistically set pro, then confirm with server
+  activeLicenseKey = key
   currentTier = 'pro'
-  console.log(`[license] License key valid (issued to: ${payload.email ?? payload.issued_to ?? 'unknown'}). Confirming with server...`)
-
-  // First check immediately in background, then every 6 hours
-  checkLicenseServer().catch(console.error)
-  setInterval(() => checkLicenseServer().catch(console.error), CHECK_INTERVAL_MS)
+  console.log(
+    `[license] License key valid (issued to: ${payload.email ?? payload.issued_to ?? 'unknown'}). Confirming with server...`
+  )
+  startPolling(key)
 }
