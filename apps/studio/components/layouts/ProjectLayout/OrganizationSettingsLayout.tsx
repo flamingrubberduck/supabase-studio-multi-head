@@ -166,6 +166,14 @@ export const generateOrganizationSettingsSections = ({
       : []),
   ]
 
+  const licenseLinks = [
+    {
+      key: 'license',
+      label: 'License',
+      href: `/org/${slug}/license`,
+    },
+  ]
+
   return [
     {
       key: 'configuration',
@@ -187,6 +195,14 @@ export const generateOrganizationSettingsSections = ({
       key: 'compliance',
       heading: 'Compliance',
       links: complianceLinks.map((item) => ({
+        ...item,
+        isActive: isLinkActive(item.key, item.href),
+      })),
+    },
+    {
+      key: 'subscription',
+      heading: 'Subscription',
+      links: licenseLinks.map((item) => ({
         ...item,
         isActive: isLinkActive(item.key, item.href),
       })),
