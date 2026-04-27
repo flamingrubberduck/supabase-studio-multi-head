@@ -8,6 +8,7 @@ import {
   updateProjectFields,
 } from '@/lib/api/self-hosted/projectsStore'
 import { teardownProjectStack } from '@/lib/api/self-hosted/orchestrator'
+import { dropReplicationSlot } from '@/lib/api/self-hosted/replicationManager'
 
 export default (req: NextApiRequest, res: NextApiResponse) => apiWrapper(req, res, handler)
 
@@ -78,7 +79,10 @@ async function handleDeprovision(primaryRef: string, res: NextApiResponse) {
 
   const standby = getStoredProjectByRef(project.standby_ref)
 
-  // Clear pairing on primary first
+  // Drop replication slot first so the primary stops retaining WAL for this standby
+  dropReplicationSlot(primaryRef, project.standby_ref)
+
+  // Clear pairing on primary
   updateProjectFields(primaryRef, { role: undefined, standby_ref: undefined })
 
   if (standby) {

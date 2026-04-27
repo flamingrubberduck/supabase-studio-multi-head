@@ -17,6 +17,7 @@ import {
   teardownProjectStack,
   waitForProjectHealth,
 } from './orchestrator'
+import { dropReplicationSlot, promoteStandby, setupReplication } from './replicationManager'
 
 const DATA_DIR = process.env.STUDIO_DATA_DIR || path.join(process.cwd(), '.studio-data')
 const STACKS_DIR = path.join(DATA_DIR, 'stacks')
@@ -79,8 +80,9 @@ export async function provisionStandby(primaryRef: string): Promise<string> {
   launchProjectStack({ ref: standby.ref, name: primary.name, ports, credentials })
     .then(() => waitForProjectHealth(publicUrl))
     .then(() => updateProjectStatus(standby.ref, 'ACTIVE_HEALTHY'))
+    .then(() => setupReplication(primaryRef, standby.ref))
     .catch((err: unknown) => {
-      console.error(`[failover] Standby launch failed for ${standby.ref}:`, err instanceof Error ? err.message : err)
+      console.error(`[failover] Standby launch/replication failed for ${standby.ref}:`, err instanceof Error ? err.message : err)
       updateProjectStatus(standby.ref, 'INACTIVE')
     })
 
@@ -119,7 +121,10 @@ export async function triggerFailover(primaryRef: string): Promise<void> {
 
   const oldDockerProject = primary.docker_project
 
-  // Promote: copy standby connection details onto primary entry
+  // Promote the standby Postgres to writable primary before we redirect traffic to it
+  await promoteStandby(standby.ref)
+
+  // Swap standby connection details onto primary registry entry
   updateProjectFields(primaryRef, {
     public_url: standby.public_url,
     kong_http_port: standby.kong_http_port,
