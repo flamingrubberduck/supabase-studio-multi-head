@@ -10,6 +10,7 @@ import {
 import {
   allocateNextPorts,
   discoverDockerStackPorts,
+  extractDockerHostname,
   generateProjectCredentials,
   launchProjectStack,
   waitForProjectHealth,
@@ -55,7 +56,7 @@ const handleGetAll = async (req: NextApiRequest, res: NextApiResponse) => {
 }
 
 const handleCreate = async (req: NextApiRequest, res: NextApiResponse) => {
-  const { name, organization_slug } = req.body
+  const { name, organization_slug, docker_host } = req.body
 
   if (!name?.trim()) {
     return res.status(400).json({ data: null, error: { message: 'Project name is required' } })
@@ -82,8 +83,9 @@ const handleCreate = async (req: NextApiRequest, res: NextApiResponse) => {
 
   const ports = allocateNextPorts(usedPorts)
   const credentials = generateProjectCredentials()
-  const multiHeadHost = process.env.MULTI_HEAD_HOST || 'localhost'
-  const publicUrl = `http://${multiHeadHost}:${ports.kongHttpPort}`
+
+  const hostname = extractDockerHostname(docker_host ?? undefined)
+  const publicUrl = `http://${hostname}:${ports.kongHttpPort}`
 
   // Persist the record immediately with COMING_UP so the UI can show progress
   const project = createStoredProject({
@@ -100,6 +102,7 @@ const handleCreate = async (req: NextApiRequest, res: NextApiResponse) => {
     service_key: credentials.serviceKey,
     jwt_secret: credentials.jwtSecret,
     status: 'COMING_UP',
+    ...(docker_host && typeof docker_host === 'string' && { docker_host }),
   })
 
   // Now we know the ref; set the real docker_project name
@@ -113,6 +116,7 @@ const handleCreate = async (req: NextApiRequest, res: NextApiResponse) => {
     name: name.trim(),
     ports,
     credentials,
+    ...(docker_host && typeof docker_host === 'string' && { docker_host }),
   })
     .then(() => waitForProjectHealth(publicUrl))
     .then(() => updateProjectStatus(project.ref, 'ACTIVE_HEALTHY'))

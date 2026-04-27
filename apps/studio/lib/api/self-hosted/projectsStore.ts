@@ -54,6 +54,10 @@ export interface StoredProject {
   failure_streak?: number
   failover_count?: number
   last_failover_at?: string
+
+  // Remote Docker host (e.g. "ssh://user@host", "tcp://host:2376")
+  // undefined = local Docker daemon
+  docker_host?: string
 }
 
 const DATA_DIR =
@@ -125,6 +129,7 @@ export interface CreateProjectData {
   service_key: string
   jwt_secret: string
   status?: string
+  docker_host?: string
 }
 
 /**
@@ -156,6 +161,8 @@ export interface ImportProjectData {
   db_port?: number
   db_user?: string
   db_name?: string
+
+  docker_host?: string
 }
 
 export function createStoredProject(data: CreateProjectData): StoredProject {
@@ -188,6 +195,7 @@ export function createStoredProject(data: CreateProjectData): StoredProject {
     anon_key: data.anon_key,
     service_key: data.service_key,
     jwt_secret: data.jwt_secret,
+    ...(data.docker_host !== undefined && { docker_host: data.docker_host }),
   }
 
   writeToDisk([...existing, project])
@@ -233,6 +241,7 @@ export function importStoredProject(data: ImportProjectData): StoredProject {
     ...(data.db_port !== undefined && { db_port: data.db_port }),
     ...(data.db_user !== undefined && { db_user: data.db_user }),
     ...(data.db_name !== undefined && { db_name: data.db_name }),
+    ...(data.docker_host !== undefined && { docker_host: data.docker_host }),
   }
 
   writeToDisk([...existing, project])

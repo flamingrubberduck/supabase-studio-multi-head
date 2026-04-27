@@ -8,11 +8,17 @@ import type { ResponseError, UseCustomMutationOptions } from '@/types'
 // These call self-hosted-only routes that are not in the OpenAPI spec,
 // so we use fetch directly rather than the typed openapi-fetch wrappers.
 
-async function callStandby(ref: string, method: 'POST' | 'DELETE') {
-  const res = await fetch(`/api/platform/projects/${ref}/standby`, { method })
+async function callStandby(ref: string, method: 'POST' | 'DELETE', body?: { docker_host?: string }) {
+  const res = await fetch(`/api/platform/projects/${ref}/standby`, {
+    method,
+    ...(body !== undefined && {
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  })
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body?.error?.message ?? `Request failed (HTTP ${res.status})`)
+    const responseBody = await res.json().catch(() => ({}))
+    throw new Error(responseBody?.error?.message ?? `Request failed (HTTP ${res.status})`)
   }
   return res.json()
 }
@@ -28,14 +34,15 @@ async function callFailover(ref: string) {
 
 // ── Provision standby ────────────────────────────────────────────────────────
 
-type StandbyVariables = { ref: string }
+type StandbyVariables = { ref: string; docker_host?: string }
 
 export const useProvisionStandbyMutation = (
   options: UseCustomMutationOptions<unknown, ResponseError, StandbyVariables> = {}
 ) => {
   const queryClient = useQueryClient()
   return useMutation<unknown, ResponseError, StandbyVariables>({
-    mutationFn: ({ ref }) => callStandby(ref, 'POST'),
+    mutationFn: ({ ref, docker_host }) =>
+      callStandby(ref, 'POST', docker_host !== undefined ? { docker_host } : undefined),
     async onSuccess(data, variables, context) {
       await queryClient.invalidateQueries({ queryKey: projectKeys.detail(variables.ref) })
       await options.onSuccess?.(data, variables, context)

@@ -16,6 +16,7 @@ import { spawnSync } from 'node:child_process'
 
 import type { StoredProject } from './projectsStore'
 import { getStoredProjectByRef } from './projectsStore'
+import { extractDockerHostname } from './orchestrator'
 
 const DATA_DIR = process.env.STUDIO_DATA_DIR || path.join(process.cwd(), '.studio-data')
 const STACKS_DIR = path.join(DATA_DIR, 'stacks')
@@ -32,6 +33,23 @@ const BASEBACKUP_IMAGE = process.env.REPLICATION_BASEBACKUP_IMAGE || 'postgres:1
 // Docker helpers
 // ─────────────────────────────────────────────────────────────
 
+/**
+ * Returns a safe env object for docker CLI calls targeting the project's daemon.
+ * When the project has a docker_host set, DOCKER_HOST is overridden to route
+ * commands to the correct remote daemon.
+ */
+function projectDockerEnv(project: StoredProject): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {}
+  for (const key of [
+    'PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TERM', 'TMPDIR', 'TMP', 'TEMP',
+    'XDG_RUNTIME_DIR', 'DOCKER_HOST', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH', 'DOCKER_BUILDKIT',
+  ]) {
+    if (process.env[key] !== undefined) env[key] = process.env[key]
+  }
+  if (project.docker_host) env['DOCKER_HOST'] = project.docker_host
+  return env
+}
+
 function composeBaseArgs(project: StoredProject): string[] {
   const projectName = project.docker_project || `supabase-${project.ref}`
   const args = ['compose', '-p', projectName]
@@ -45,7 +63,7 @@ function runPsql(project: StoredProject, sql: string): { ok: boolean; output: st
   const r = spawnSync(
     'docker',
     [...composeBaseArgs(project), 'exec', '-T', 'db', 'psql', '-U', 'postgres', '-t', '-c', sql],
-    { encoding: 'utf-8', timeout: 30_000 }
+    { encoding: 'utf-8', timeout: 30_000, env: projectDockerEnv(project) }
   )
   return { ok: r.status === 0 && !r.error, output: (r.stdout + r.stderr).trim() }
 }
@@ -54,6 +72,7 @@ function composeDbService(project: StoredProject, action: 'stop' | 'start'): boo
   const r = spawnSync('docker', [...composeBaseArgs(project), action, 'db'], {
     encoding: 'utf-8',
     timeout: 30_000,
+    env: projectDockerEnv(project),
   })
   return r.status === 0 && !r.error
 }
@@ -126,13 +145,18 @@ export async function setupReplication(primaryRef: string, standbyRef: string): 
   }
 
   // ── 5. pg_basebackup ────────────────────────────────────────────────────────
-  // Named volume: <dockerProject>_db-data (Compose scopes volumes by project name)
+  // The container runs on the standby's Docker host (via standby's DOCKER_HOST).
+  // For a local primary (no docker_host), host.docker.internal is the right peer
+  // address from inside the container. For a remote primary, use its actual hostname.
   const volumeName = `${standby.docker_project}_db-data`
+  const primaryHost = primary.docker_host
+    ? extractDockerHostname(primary.docker_host)
+    : 'host.docker.internal'
   const backupCmd = [
     'rm -rf /var/lib/postgresql/data/* /var/lib/postgresql/data/.[!.]*',
     [
       'pg_basebackup',
-      '-h host.docker.internal',
+      `-h ${primaryHost}`,
       `-p ${primary.postgres_port}`,
       '-U supabase_replicator',
       '-D /var/lib/postgresql/data',
@@ -144,18 +168,23 @@ export async function setupReplication(primaryRef: string, standbyRef: string): 
     ].join(' '),
   ].join(' && ')
 
+  const backupDockerArgs = [
+    'run', '--rm',
+    '-v', `${volumeName}:/var/lib/postgresql/data`,
+    '-e', `PGPASSWORD=${primary.db_password}`,
+    BASEBACKUP_IMAGE,
+    'bash', '-c', backupCmd,
+  ]
+  // For a local primary the pg_basebackup container needs host-gateway to resolve
+  // host.docker.internal (Linux alias; Mac/Win already support it natively).
+  if (!primary.docker_host) {
+    backupDockerArgs.splice(2, 0, '--add-host', 'host.docker.internal:host-gateway')
+  }
+
   const backup = spawnSync(
     'docker',
-    [
-      'run', '--rm',
-      '-v', `${volumeName}:/var/lib/postgresql/data`,
-      // host-gateway is a Linux alias; on Mac/Win host.docker.internal is already reachable
-      '--add-host', 'host.docker.internal:host-gateway',
-      '-e', `PGPASSWORD=${primary.db_password}`,
-      BASEBACKUP_IMAGE,
-      'bash', '-c', backupCmd,
-    ],
-    { encoding: 'utf-8', timeout: 300_000 }
+    backupDockerArgs,
+    { encoding: 'utf-8', timeout: 300_000, env: projectDockerEnv(standby) }
   )
 
   if (backup.error || backup.status !== 0) {
@@ -247,7 +276,7 @@ function ensureReplicationHba(primary: StoredProject): void {
         `(echo 'host replication supabase_replicator all md5' >> "$HBA" && ` +
         `psql -U postgres -c 'SELECT pg_reload_conf();')`,
     ],
-    { encoding: 'utf-8', timeout: 15_000 }
+    { encoding: 'utf-8', timeout: 15_000, env: projectDockerEnv(primary) }
   )
   if (r.status !== 0) {
     console.warn('[replication] pg_hba update step (may already be configured):', r.stderr?.trim())

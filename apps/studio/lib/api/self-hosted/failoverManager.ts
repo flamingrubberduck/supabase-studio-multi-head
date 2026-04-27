@@ -12,6 +12,7 @@ import {
 import {
   allocateNextPorts,
   discoverDockerStackPorts,
+  extractDockerHostname,
   generateProjectCredentials,
   launchProjectStack,
   teardownProjectStack,
@@ -29,9 +30,13 @@ const STACKS_DIR = path.join(DATA_DIR, 'stacks')
  * but inherits the primary's JWT secret, anon key, and service key so that tokens issued
  * before a failover remain valid after one.
  *
+ * Pass targetDockerHost to provision the standby on a different Docker host than the
+ * primary (e.g. "ssh://user@standby-host"). When omitted the standby lands on the same
+ * Docker daemon as the primary.
+ *
  * Returns the standby's ref.
  */
-export async function provisionStandby(primaryRef: string): Promise<string> {
+export async function provisionStandby(primaryRef: string, targetDockerHost?: string): Promise<string> {
   const primary = getStoredProjectByRef(primaryRef)
   if (!primary) throw new Error(`Project ${primaryRef} not found`)
   if (primary.role === 'standby') throw new Error(`Cannot provision a standby for a standby project`)
@@ -51,8 +56,10 @@ export async function provisionStandby(primaryRef: string): Promise<string> {
     serviceKey: primary.service_key,
   }
 
-  const multiHeadHost = process.env.MULTI_HEAD_HOST || 'localhost'
-  const publicUrl = `http://${multiHeadHost}:${ports.kongHttpPort}`
+  // Standby runs on targetDockerHost if given; otherwise on the same host as the primary.
+  const standbyDockerHost = targetDockerHost ?? primary.docker_host
+  const standbyHostname = extractDockerHostname(standbyDockerHost)
+  const publicUrl = `http://${standbyHostname}:${ports.kongHttpPort}`
 
   const standby = createStoredProject({
     name: `${primary.name} (standby)`,
@@ -67,6 +74,7 @@ export async function provisionStandby(primaryRef: string): Promise<string> {
     service_key: credentials.serviceKey,
     jwt_secret: credentials.jwtSecret,
     status: 'COMING_UP',
+    ...(standbyDockerHost !== undefined && { docker_host: standbyDockerHost }),
   })
 
   const dockerProject = `supabase-${standby.ref}`
@@ -77,7 +85,7 @@ export async function provisionStandby(primaryRef: string): Promise<string> {
   })
   updateProjectFields(primaryRef, { role: 'primary', standby_ref: standby.ref })
 
-  launchProjectStack({ ref: standby.ref, name: primary.name, ports, credentials })
+  launchProjectStack({ ref: standby.ref, name: primary.name, ports, credentials, docker_host: standbyDockerHost })
     .then(() => waitForProjectHealth(publicUrl))
     .then(() => updateProjectStatus(standby.ref, 'ACTIVE_HEALTHY'))
     .then(() => setupReplication(primaryRef, standby.ref))
@@ -159,15 +167,16 @@ export async function triggerFailover(primaryRef: string): Promise<void> {
       `(failover #${(primary.failover_count ?? 0) + 1})`
   )
 
-  // Tear down the failed primary stack
+  // Tear down the failed primary stack on its original Docker host
   if (oldDockerProject) {
-    teardownProjectStack(primaryRef, oldDockerProject).catch((err) =>
+    teardownProjectStack(primaryRef, oldDockerProject, primary.docker_host).catch((err) =>
       console.warn(`[failover] Teardown of ${oldDockerProject} failed (non-fatal):`, err)
     )
   }
 
-  // Keep a standby always ready
-  provisionStandby(primaryRef).catch((err) =>
+  // Keep a standby always ready; provision it on the old primary's host (standby now runs
+  // on the former standby's host — the new standby should mirror that arrangement).
+  provisionStandby(primaryRef, standby.docker_host).catch((err) =>
     console.error(`[failover] Failed to provision replacement standby for ${primaryRef}:`, err)
   )
 }
