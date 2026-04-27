@@ -48,8 +48,10 @@ const handleDelete = async (req: NextApiRequest, res: NextApiResponse) => {
     return res.status(404).json({ data: null, error: { message: 'Organization not found' } })
   }
 
-  // Refuse if the org still has projects
-  const projects = getStoredProjects().filter((p) => p.organization_slug === slug)
+  // Refuse if the org still has any projects (including replicas/standbys that belong to it)
+  const projects = getStoredProjects().filter(
+    (p) => p.organization_slug === slug && p.ref !== 'default'
+  )
   if (projects.length > 0) {
     return res.status(400).json({
       data: null,

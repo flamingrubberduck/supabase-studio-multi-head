@@ -13,6 +13,7 @@ export const projectKeys = {
       sort?: 'name_asc' | 'name_desc' | 'created_asc' | 'created_desc'
       search?: string
       statuses?: string[]
+      includeStandby?: boolean
     }
   ) => [INFINITE_PROJECTS_KEY_PREFIX, slug, params].filter(Boolean),
   status: (projectRef: string | undefined) => ['project', projectRef, 'status'] as const,

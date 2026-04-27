@@ -93,7 +93,7 @@ export const ProjectTableRow = ({
                   </Badge>
                 )}
                 {isStandby && primaryName && (
-                  <Badge variant="outline" className="text-[10px] leading-none py-0.5 px-1.5 text-foreground-muted">
+                  <Badge variant="secondary" className="text-[10px] leading-none py-0.5 px-1.5 text-foreground-muted">
                     for {primaryName}
                   </Badge>
                 )}

@@ -63,6 +63,7 @@ export async function provisionStandby(primaryRef: string, targetDockerHost?: st
 
   const standby = createStoredProject({
     name: `${primary.name} (standby)`,
+    organization_slug: primary.organization_slug,
     public_url: publicUrl,
     postgres_port: ports.postgresPort,
     kong_http_port: ports.kongHttpPort,

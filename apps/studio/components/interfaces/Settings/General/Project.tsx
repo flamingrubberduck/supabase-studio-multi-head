@@ -13,6 +13,7 @@ import {
 import PauseProjectButton from './Infrastructure/PauseProjectButton'
 import RestartServerButton from './Infrastructure/RestartServerButton'
 import { FailoverSection } from './Infrastructure/FailoverSection'
+import { ClusterSection } from './Infrastructure/ClusterSection'
 import { useIsFeatureEnabled } from '@/hooks/misc/useIsFeatureEnabled'
 import { useSelectedOrganizationQuery } from '@/hooks/misc/useSelectedOrganization'
 import { useSelectedProjectQuery } from '@/hooks/misc/useSelectedProject'
@@ -75,6 +76,7 @@ export const Project = () => {
       </PageSection>
 
       {!IS_PLATFORM && <FailoverSection />}
+      {!IS_PLATFORM && <ClusterSection />}
 
       {!isBranch && (
         <PageSection>

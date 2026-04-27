@@ -40,6 +40,7 @@ export type ProjectCreateVariables = {
     jwt_secret?: string
     public_url?: string
     docker_host?: string
+    cluster_mode?: boolean
   }
 }
 

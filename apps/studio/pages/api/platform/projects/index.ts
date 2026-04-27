@@ -4,6 +4,7 @@ import apiWrapper from '@/lib/api/apiWrapper'
 import {
   createStoredProject,
   getStoredProjects,
+  updateProjectFields,
   updateProjectStatus,
   updateStoredProjectField,
 } from '@/lib/api/self-hosted/projectsStore'
@@ -15,6 +16,7 @@ import {
   launchProjectStack,
   waitForProjectHealth,
 } from '@/lib/api/self-hosted/orchestrator'
+import { provisionReplica } from '@/lib/api/self-hosted/clusterManager'
 
 export default (req: NextApiRequest, res: NextApiResponse) => apiWrapper(req, res, handler)
 
@@ -35,8 +37,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 const handleGetAll = async (req: NextApiRequest, res: NextApiResponse) => {
   const { limit = '100', offset = '0', search } = req.query
 
-  // Standbys are internal implementation details — hide them from the project list
-  let projects = getStoredProjects().filter((p) => p.role !== 'standby')
+  // Standbys and replicas are internal implementation details — hide them from the project list
+  let projects = getStoredProjects().filter((p) => p.role !== 'standby' && p.role !== 'replica')
 
   if (search && typeof search === 'string' && search.length > 0) {
     const q = search.toLowerCase()
@@ -56,7 +58,7 @@ const handleGetAll = async (req: NextApiRequest, res: NextApiResponse) => {
 }
 
 const handleCreate = async (req: NextApiRequest, res: NextApiResponse) => {
-  const { name, organization_slug, docker_host } = req.body
+  const { name, organization_slug, docker_host, cluster_mode } = req.body
 
   if (!name?.trim()) {
     return res.status(400).json({ data: null, error: { message: 'Project name is required' } })
@@ -111,15 +113,26 @@ const handleCreate = async (req: NextApiRequest, res: NextApiResponse) => {
 
   // Launch the Docker Compose stack in the background; the caller gets the
   // project record immediately (status=COMING_UP) and can poll for status.
+  const dockerHostVal = docker_host && typeof docker_host === 'string' ? docker_host : undefined
   launchProjectStack({
     ref: project.ref,
     name: name.trim(),
     ports,
     credentials,
-    ...(docker_host && typeof docker_host === 'string' && { docker_host }),
+    ...(dockerHostVal && { docker_host: dockerHostVal }),
   })
     .then(() => waitForProjectHealth(publicUrl))
     .then(() => updateProjectStatus(project.ref, 'ACTIVE_HEALTHY'))
+    .then(() => {
+      if (cluster_mode) {
+        // Mark master as cluster head and provision the first replica
+        updateProjectFields(project.ref, { cluster_id: project.ref })
+        provisionReplica(project.ref, dockerHostVal).catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err)
+          console.error(`[cluster] Initial replica provision failed for ${project.ref}: ${msg}`)
+        })
+      }
+    })
     .catch((err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err)
       console.error(`[multi-head] Stack launch failed for ${project.ref}: ${msg}`)

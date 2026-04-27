@@ -50,6 +50,11 @@ export const ProjectCard = ({
   const providerLabel =
     project.cloud_provider === 'AWS_NIMBUS' ? infraAwsNimbusLabel : project.cloud_provider
 
+  // Failover fields — added by self-hosted multi-head, absent on cloud
+  const p = project as typeof project & { role?: string; primary_name?: string }
+  const isStandby = p.role === 'standby'
+  const primaryName = p.primary_name
+
   const desc = isStandby
     ? primaryName
       ? `Standby for ${primaryName}`
@@ -65,11 +70,6 @@ export const ProjectCard = ({
   const isVercelIntegrated = vercelIntegration !== undefined
   const githubRepository = githubIntegration?.metadata.name ?? undefined
   const projectStatus = inferProjectStatus(project.status)
-
-  // Failover fields — added by self-hosted multi-head, absent on cloud
-  const p = project as typeof project & { role?: string; primary_name?: string }
-  const isStandby = p.role === 'standby'
-  const primaryName = p.primary_name
 
   return (
     <>

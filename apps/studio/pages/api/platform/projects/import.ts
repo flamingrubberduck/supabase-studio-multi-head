@@ -33,6 +33,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   const {
     name,
+    organization_slug,
     public_url,
     db_password,
     anon_key,
@@ -86,6 +87,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   const project = importStoredProject({
     name: (name as string).trim(),
+    ...(organization_slug !== undefined && { organization_slug: String(organization_slug) }),
     public_url: public_url as string,
     db_password: (db_password as string) ?? '',
     anon_key: anon_key as string,

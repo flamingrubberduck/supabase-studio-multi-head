@@ -47,13 +47,17 @@ export interface StoredProject {
   db_user?: string
   db_name?: string
 
-  // Failover fields
-  role?: 'primary' | 'standby'
+  // Failover / cluster fields
+  role?: 'primary' | 'standby' | 'replica'
   standby_ref?: string
   primary_ref?: string
   failure_streak?: number
   failover_count?: number
   last_failover_at?: string
+
+  // Cluster fields (cluster_id = ref of the master node)
+  cluster_id?: string
+  replica_rank?: number
 
   // Remote Docker host (e.g. "ssh://user@host", "tcp://host:2376")
   // undefined = local Docker daemon

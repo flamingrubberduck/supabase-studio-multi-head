@@ -39,7 +39,7 @@ const BASEBACKUP_IMAGE = process.env.REPLICATION_BASEBACKUP_IMAGE || 'postgres:1
  * commands to the correct remote daemon.
  */
 function projectDockerEnv(project: StoredProject): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {}
+  const env = {} as NodeJS.ProcessEnv
   for (const key of [
     'PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TERM', 'TMPDIR', 'TMP', 'TEMP',
     'XDG_RUNTIME_DIR', 'DOCKER_HOST', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH', 'DOCKER_BUILDKIT',

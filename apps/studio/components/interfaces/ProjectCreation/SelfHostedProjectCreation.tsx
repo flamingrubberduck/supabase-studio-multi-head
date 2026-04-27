@@ -1,10 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { ChevronDown, ChevronUp, ShieldCheck } from 'lucide-react'
+import { ChevronDown, ChevronUp, Database, Server, ShieldCheck } from 'lucide-react'
 import { useRouter } from 'next/router'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
-import { Button, Form_Shadcn_, FormControl_Shadcn_, FormField_Shadcn_, Switch } from 'ui'
+import { Button, Form_Shadcn_, FormControl_Shadcn_, FormField_Shadcn_ } from 'ui'
 import { Input } from 'ui-patterns/DataInputs/Input'
 import { FormItemLayout } from 'ui-patterns/form/FormItemLayout/FormItemLayout'
 import { z } from 'zod'
@@ -12,6 +12,8 @@ import { z } from 'zod'
 import Panel from '@/components/ui/Panel'
 import { useProjectCreateMutation } from '@/data/projects/project-create-mutation'
 import { useSelectedOrganizationQuery } from '@/hooks/misc/useSelectedOrganization'
+
+type DeployMode = 'standalone' | 'standby' | 'cluster'
 
 const schema = z.object({
   projectName: z
@@ -39,11 +41,32 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
+const DEPLOY_MODES: { value: DeployMode; label: string; description: string; icon: React.ReactNode }[] = [
+  {
+    value: 'standalone',
+    label: 'Standalone',
+    description: 'Single Supabase stack. Simple and fast.',
+    icon: <Server size={16} />,
+  },
+  {
+    value: 'standby',
+    label: 'With failover standby',
+    description: 'A warm standby promoted automatically in ~90 s if the primary fails.',
+    icon: <ShieldCheck size={16} />,
+  },
+  {
+    value: 'cluster',
+    label: 'Cluster mode',
+    description: 'One master + read replicas. Auto-promotes the next replica on master failure.',
+    icon: <Database size={16} />,
+  },
+]
+
 export function SelfHostedProjectCreation() {
   const router = useRouter()
   const { data: currentOrg } = useSelectedOrganizationQuery()
-  const [withStandby, setWithStandby] = useState(false)
-  const [isProvisioningStandby, setIsProvisioningStandby] = useState(false)
+  const [deployMode, setDeployMode] = useState<DeployMode>('standalone')
+  const [isPostCreate, setIsPostCreate] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   const form = useForm<FormValues>({
@@ -53,7 +76,7 @@ export function SelfHostedProjectCreation() {
   })
 
   const { mutateAsync: createProjectAsync, isPending: isCreating } = useProjectCreateMutation()
-  const isPending = isCreating || isProvisioningStandby
+  const isPending = isCreating || isPostCreate
 
   const onSubmit = async ({ projectName, dockerHost }: FormValues) => {
     if (!currentOrg) return toast.error('No organization selected')
@@ -66,7 +89,10 @@ export function SelfHostedProjectCreation() {
         name: projectName,
         organizationSlug: currentOrg.slug,
         dbPass: '',
-        selfHosted: { docker_host },
+        selfHosted: {
+          docker_host,
+          ...(deployMode === 'cluster' && { cluster_mode: true }),
+        },
       })
     } catch (err) {
       toast.error(`Failed to create project: ${err instanceof Error ? err.message : String(err)}`)
@@ -75,8 +101,8 @@ export function SelfHostedProjectCreation() {
 
     if (!project) return
 
-    if (withStandby) {
-      setIsProvisioningStandby(true)
+    if (deployMode === 'standby') {
+      setIsPostCreate(true)
       try {
         const res = await fetch(`/api/platform/projects/${project.ref}/standby`, {
           method: 'POST',
@@ -89,11 +115,17 @@ export function SelfHostedProjectCreation() {
       } catch {
         toast.warning('Project created — standby could not be provisioned. Add it from Settings › General.')
       } finally {
-        setIsProvisioningStandby(false)
+        setIsPostCreate(false)
       }
     }
 
     router.push(`/project/${project.ref}`)
+  }
+
+  const submitLabel = () => {
+    if (isPostCreate) return 'Provisioning standby...'
+    if (isCreating) return 'Launching stack...'
+    return 'Create project'
   }
 
   return (
@@ -115,11 +147,7 @@ export function SelfHostedProjectCreation() {
                 Cancel
               </Button>
               <Button htmlType="submit" loading={isPending} disabled={isPending}>
-                {isProvisioningStandby
-                  ? 'Provisioning standby...'
-                  : isCreating
-                    ? 'Launching stack...'
-                    : 'Create project'}
+                {submitLabel()}
               </Button>
             </div>
           }
@@ -142,20 +170,32 @@ export function SelfHostedProjectCreation() {
             />
 
             <FormItemLayout
-              label={
-                <span className="flex items-center gap-1.5">
-                  <ShieldCheck size={14} className="text-foreground-light" />
-                  Launch with failover standby
-                </span>
-              }
+              label="Deployment mode"
               layout="horizontal"
-              description="A warm standby stack will be provisioned automatically. Studio will fail over in ~90 s if the primary becomes unavailable."
+              description="Choose how this project is deployed."
             >
-              <Switch
-                checked={withStandby}
-                onCheckedChange={setWithStandby}
-                disabled={isPending}
-              />
+              <div className="flex flex-col gap-2 w-full">
+                {DEPLOY_MODES.map((mode) => (
+                  <button
+                    key={mode.value}
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => setDeployMode(mode.value)}
+                    className={[
+                      'flex items-start gap-3 rounded-md border px-3 py-2.5 text-left transition-colors',
+                      deployMode === mode.value
+                        ? 'border-brand bg-brand-200 text-foreground'
+                        : 'border-border-strong bg-surface-100 text-foreground-light hover:border-foreground-muted',
+                    ].join(' ')}
+                  >
+                    <span className="mt-0.5 shrink-0">{mode.icon}</span>
+                    <span>
+                      <span className="block text-sm font-medium">{mode.label}</span>
+                      <span className="block text-xs text-foreground-light">{mode.description}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
             </FormItemLayout>
 
             <button

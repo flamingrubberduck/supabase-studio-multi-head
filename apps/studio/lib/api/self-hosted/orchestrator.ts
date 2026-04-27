@@ -94,7 +94,7 @@ export function extractDockerHostname(dockerHost?: string): string {
  * --env-file values when launching stacks.
  */
 function buildDockerEnv(dockerHost?: string): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {}
+  const env = {} as NodeJS.ProcessEnv
   for (const key of [
     'PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TERM', 'TMPDIR', 'TMP', 'TEMP',
     'XDG_RUNTIME_DIR', 'DOCKER_HOST', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH', 'DOCKER_BUILDKIT',
