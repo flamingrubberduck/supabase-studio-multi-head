@@ -63,25 +63,38 @@ RUN set -e; \
     [ -n "$plugin" ] || { echo "ERROR: docker-compose not found in docker:27-cli"; exit 1; }; \
     cp "$plugin" /docker-compose
 
-# Copy only compiled code and dependencies
+# Copy only compiled code and dependencies (built inside Docker)
 FROM base AS production
 COPY --from=builder /app/apps/studio/public ./apps/studio/public
 COPY --from=builder /app/apps/studio/.next/standalone ./
 COPY --from=builder /app/apps/studio/.next/static ./apps/studio/.next/static
 
-# Docker CLI — required for multi-head stack orchestration (spawning new projects).
+# Prebuilt target: Next.js was compiled on the CI runner; build artifacts are
+# bind-mounted / COPYed in before this stage runs. Use with:
+#   --target prebuilt --build-context studio-build=apps/studio
+FROM base AS prebuilt
+COPY apps/studio/public ./apps/studio/public
+COPY apps/studio/.next/standalone ./
+COPY apps/studio/.next/static ./apps/studio/.next/static
+
+# Shared tail for both production and prebuilt stages
+FROM production AS production-final
 COPY --from=docker:27-cli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=docker-tools /docker-compose /usr/local/lib/docker/cli-plugins/docker-compose
-
-# Bake the Supabase compose template + init volumes into the image so Studio can
-# spawn new project stacks without requiring a host-mounted docker/ directory.
-# Users who want to override can still bind-mount SUPABASE_COMPOSE_FILE.
 COPY docker/docker-compose.yml /app/supabase-docker/docker-compose.yml
 COPY docker/volumes/           /app/supabase-docker/volumes/
-
-# Default compose template path — overridable via environment variable
 ENV SUPABASE_COMPOSE_FILE=/app/supabase-docker/docker-compose.yml
+EXPOSE 3000
+ENTRYPOINT ["docker-entrypoint.sh"]
+HEALTHCHECK --interval=5s --timeout=5s --retries=3 CMD node -e "fetch('http://localhost:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})"
+CMD ["node", "apps/studio/server.js"]
 
+FROM prebuilt AS prebuilt-final
+COPY --from=docker:27-cli /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=docker-tools /docker-compose /usr/local/lib/docker/cli-plugins/docker-compose
+COPY docker/docker-compose.yml /app/supabase-docker/docker-compose.yml
+COPY docker/volumes/           /app/supabase-docker/volumes/
+ENV SUPABASE_COMPOSE_FILE=/app/supabase-docker/docker-compose.yml
 EXPOSE 3000
 ENTRYPOINT ["docker-entrypoint.sh"]
 HEALTHCHECK --interval=5s --timeout=5s --retries=3 CMD node -e "fetch('http://localhost:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})"
