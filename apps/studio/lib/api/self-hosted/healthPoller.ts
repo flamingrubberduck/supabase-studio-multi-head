@@ -1,5 +1,6 @@
 import { getStoredProjects, updateProjectFields } from './projectsStore'
 import { triggerFailover } from './failoverManager'
+import { triggerClusterFailover } from './clusterManager'
 
 const POLL_INTERVAL_MS = 30_000
 const FAILURE_THRESHOLD = 3
@@ -20,8 +21,27 @@ async function pollOnce(): Promise<void> {
   const projects = getStoredProjects()
   for (const project of projects) {
     if (project.ref === 'default') continue
-    if (project.role === 'standby') continue
     if (project.status === 'COMING_UP' || project.status === 'INACTIVE') continue
+
+    if (project.role === 'replica') {
+      // Monitor replica health but don't auto-promote — just mark INACTIVE so it's
+      // excluded from cluster failover candidates.
+      const healthy = await checkHealth(project.public_url)
+      if (!healthy) {
+        const streak = (project.failure_streak ?? 0) + 1
+        console.warn(`[cluster] replica ${project.name} (${project.ref}) health miss #${streak}`)
+        if (streak >= FAILURE_THRESHOLD) {
+          updateProjectFields(project.ref, { failure_streak: 0, status: 'INACTIVE' })
+        } else {
+          updateProjectFields(project.ref, { failure_streak: streak })
+        }
+      } else if ((project.failure_streak ?? 0) > 0) {
+        updateProjectFields(project.ref, { failure_streak: 0 })
+      }
+      continue
+    }
+
+    if (project.role === 'standby') continue
 
     const healthy = await checkHealth(project.public_url)
 
@@ -38,9 +58,16 @@ async function pollOnce(): Promise<void> {
     if (streak >= FAILURE_THRESHOLD) {
       // Reset streak before triggering so a re-entry of pollOnce doesn't double-trigger
       updateProjectFields(project.ref, { failure_streak: 0 })
-      triggerFailover(project.ref).catch((err) => {
-        console.error(`[failover] triggerFailover failed for ${project.ref}:`, err)
-      })
+
+      if (project.cluster_id) {
+        triggerClusterFailover(project.ref).catch((err) => {
+          console.error(`[cluster] triggerClusterFailover failed for ${project.ref}:`, err)
+        })
+      } else {
+        triggerFailover(project.ref).catch((err) => {
+          console.error(`[failover] triggerFailover failed for ${project.ref}:`, err)
+        })
+      }
     } else {
       updateProjectFields(project.ref, { failure_streak: streak })
     }
