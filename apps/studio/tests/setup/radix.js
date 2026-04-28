@@ -26,15 +26,17 @@ class PointerEvent extends Event {
   }
 }
 
-window.PointerEvent = PointerEvent
-window.HTMLElement.prototype.scrollIntoView = function () {}
+if (typeof window !== 'undefined') {
+  window.PointerEvent = PointerEvent
+  window.HTMLElement.prototype.scrollIntoView = function () {}
 
-// // https://github.com/radix-ui/primitives/issues/420#issuecomment-771615182
-window.ResizeObserver = class ResizeObserver {
-  constructor(cb) {
-    this.cb = cb
+  // // https://github.com/radix-ui/primitives/issues/420#issuecomment-771615182
+  window.ResizeObserver = class ResizeObserver {
+    constructor(cb) {
+      this.cb = cb
+    }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
   }
-  observe() {}
-  unobserve() {}
-  disconnect() {}
 }

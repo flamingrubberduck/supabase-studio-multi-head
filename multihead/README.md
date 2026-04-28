@@ -2,6 +2,8 @@
 
 A self-hosted Supabase Dashboard that lets you **create and manage multiple isolated Supabase projects** from a single UI — no Supabase Cloud account required.
 
+**Pro tier** unlocks high-availability features: read replicas, hot standbys, automatic failover, and cluster mode.
+
 ---
 
 ## Choose your path
@@ -20,13 +22,15 @@ A self-hosted Supabase Dashboard that lets you **create and manage multiple isol
 multihead/
 ├── docker-compose.yml          # Full Supabase stack with multi-head Studio pre-wired (new install)
 ├── docker-compose.overlay.yml  # Overlay for existing Supabase deployments (upgrade path)
-├── .env.example                # All configuration variables, documented
 ├── start.sh                    # New-install: one-command setup + launch
 ├── integrate.sh                # Existing-install: drop multi-head onto a running stack
 ├── build-push.sh               # Build the Studio image and push to GHCR
-├── utils/
-│   └── generate-keys.sh        # Generate JWT secret and API keys
-└── volumes/                    # Init scripts for Postgres, Kong, Realtime, etc.
+├── cli/
+│   └── smh.mjs                 # smh CLI — manage projects, replicas, standbys, failover, license
+├── tests/
+│   └── test-cluster-failover.mjs  # E2E test suite (cluster / failover / replication)
+└── utils/
+    └── generate-keys.sh        # Generate JWT secret and API keys
 ```
 
 ---
@@ -35,11 +39,11 @@ multihead/
 
 **Start here if you have no existing Supabase deployment.**
 
-**Prerequisites:** Docker Engine ≥ 24 with the Compose plugin.
+**Prerequisites:** Docker Engine ≥ 24 with the Compose plugin, Node.js ≥ 22 (for the CLI).
 
 ```bash
 # Get the multihead/ folder
-git clone --filter=blob:none --sparse https://github.com/<owner>/supabase-studio-multi-head.git
+git clone --filter=blob:none --sparse https://github.com/flamingrubberduck/supabase-studio-multi-head.git
 cd supabase-studio-multi-head && git sparse-checkout set multihead && cd multihead
 
 # Launch (auto-generates .env from .env.example and prompts you to review it)
@@ -79,7 +83,7 @@ Your existing Postgres data, Auth users, and Storage are untouched. Only the Stu
 bash integrate.sh /path/to/your/supabase/docker
 ```
 
-That's it. The script:
+The script:
 1. Copies `docker-compose.overlay.yml` into your existing docker directory
 2. Adds `MULTI_HEAD_IMAGE`, `MULTI_HEAD_HOST`, `STUDIO_DATA_DIR` to your `.env`
 3. Detects Linux bridge IP automatically
@@ -91,10 +95,10 @@ That's it. The script:
 # 1. Copy the overlay into your existing docker/ directory
 cp docker-compose.overlay.yml /path/to/your/supabase/docker/
 
-# 2. Add these three variables to your existing .env
+# 2. Add these variables to your existing .env
 cat >> /path/to/your/supabase/docker/.env <<'EOF'
 
-MULTI_HEAD_IMAGE=ghcr.io/<owner>/supabase-studio-multi-head:latest
+MULTI_HEAD_IMAGE=ghcr.io/flamingrubberduck/supabase-studio-multi-head:latest
 MULTI_HEAD_HOST=host.docker.internal   # Linux: use your Docker bridge IP instead
 STUDIO_DATA_DIR=./volumes/studio-data
 EOF
@@ -142,7 +146,7 @@ Multi-head registers the stack so you can browse its database, tables, and Auth 
 
 ```bash
 # Same-host stack (different ports on this machine)
-curl -s http://localhost:8000/api/platform/projects/import \
+curl -s -u supabase:<dashboard-password> http://localhost:8000/api/platform/projects/import \
   -H 'Content-Type: application/json' \
   -d '{
     "name":           "My Other Stack",
@@ -158,7 +162,7 @@ curl -s http://localhost:8000/api/platform/projects/import \
   }'
 
 # Remote host (different machine)
-curl -s http://localhost:8000/api/platform/projects/import \
+curl -s -u supabase:<dashboard-password> http://localhost:8000/api/platform/projects/import \
   -H 'Content-Type: application/json' \
   -d '{
     "name":        "Remote Server",
@@ -176,35 +180,136 @@ curl -s http://localhost:8000/api/platform/projects/import \
 
 The project appears in the Studio dashboard immediately with **ACTIVE_HEALTHY** status.
 
-### Via projects.json (manual)
+---
 
-Edit `volumes/studio-data/projects.json` directly and add an entry:
+## smh CLI
 
-```json
-[
-  {
-    "id": 2,
-    "ref": "abc123def456",
-    "name": "My Other Stack",
-    "organization_id": 1,
-    "cloud_provider": "localhost",
-    "status": "ACTIVE_HEALTHY",
-    "region": "local",
-    "inserted_at": "2026-01-01T00:00:00.000Z",
-    "public_url": "http://host.docker.internal:8010",
-    "kong_http_port": 8010,
-    "postgres_port": 5442,
-    "pooler_port": 6553,
-    "pooler_tenant_id": "your-tenant-id",
-    "db_password": "<postgres-password>",
-    "anon_key": "<anon-key>",
-    "service_key": "<service-role-key>",
-    "jwt_secret": "<jwt-secret>"
-  }
-]
+`smh` is a Node.js CLI for managing multi-head projects, replicas, standbys, failover, and licenses from the terminal.
+
+```bash
+# Install (from the repo root or multihead/ directory)
+node multihead/cli/smh.mjs --help
+
+# Or add to PATH
+chmod +x multihead/cli/smh.mjs
+ln -s $(pwd)/multihead/cli/smh.mjs /usr/local/bin/smh
 ```
 
-Restart Studio to pick up changes: `docker compose restart studio`
+### Environment
+
+```bash
+export STUDIO_URL=http://localhost:8000          # Studio base URL (default: http://localhost:8082)
+export DASHBOARD_USERNAME=supabase               # Basic auth username
+export DASHBOARD_PASSWORD=your-dashboard-password
+```
+
+### Project management
+
+```bash
+smh list                    # list all projects
+smh create <name>           # create a new project (spawns a Docker stack)
+smh delete <ref>            # delete a project and its containers
+smh start  <ref>            # start a stopped project
+smh stop   <ref>            # stop a running project
+smh status <ref>            # show registry details for a project
+smh health [ref]            # show live container health
+```
+
+### License (Pro)
+
+```bash
+smh license status              # show current tier (free / pro) and grace period state
+smh license activate <key>      # activate a Pro license key
+smh license deactivate          # revert to Free tier
+```
+
+### High availability (Pro tier only)
+
+```bash
+# Read replicas — streaming replicas in a cluster
+smh replica add    <ref> [--host <docker_host>]   # provision a read replica
+smh replica remove <ref> <replica_ref>             # deprovision a replica
+
+# Hot standby — automatic failover target
+smh standby add    <ref> [--host <docker_host>]   # provision a hot standby
+smh standby remove <ref>                           # remove the standby
+
+# Manual failover
+smh failover         <ref>   # promote standby to primary
+smh cluster-failover <ref>   # promote highest-rank healthy replica to master
+```
+
+---
+
+## High availability features (Pro)
+
+Pro tier unlocks three HA mechanisms that work independently or together.
+
+### License activation
+
+Licenses are signed JWTs validated locally — no phone-home required after activation.
+
+```bash
+smh license activate <your-key>
+# or via API:
+curl -s -u supabase:<password> -X PATCH http://localhost:8000/api/platform/license \
+  -H 'Content-Type: application/json' -d '{"key":"<your-key>"}'
+```
+
+A **7-day grace period** keeps the Pro tier active if the license server is temporarily unreachable. After grace expires the instance reverts to Free.
+
+### Read replicas (cluster mode)
+
+Cluster mode runs one master + N read replicas using PostgreSQL WAL streaming replication. Replicas are ranked (1 = highest priority for promotion).
+
+```bash
+# Add a replica to project <ref>
+smh replica add <ref>
+
+# Add a replica on a different Docker host
+smh replica add <ref> --host ssh://user@replica-host.example.com
+
+# Remove a replica
+smh replica remove <ref> <replica_ref>
+
+# Promote the highest-rank healthy replica to master
+smh cluster-failover <ref>
+```
+
+**What happens under the hood:**
+- A new Postgres instance is spun up via `pg_basebackup`
+- WAL streaming replication is configured automatically
+- Replica inherits the master's JWT/anon/service keys so client tokens stay valid
+- The health poller marks unreachable replicas as `INACTIVE` and re-ranks on promotion
+
+### Hot standby (primary/standby failover)
+
+A standby is a warm replica configured for automatic promotion on primary failure.
+
+```bash
+# Add a standby for project <ref>
+smh standby add <ref>
+
+# Manually trigger failover (standby → primary)
+smh failover <ref>
+```
+
+**Failover sequence:**
+1. `pg_promote()` is called on the standby
+2. The standby's connection details (ports, URL) are swapped onto the primary registry entry — **the ref stays the same**, so all clients reconnect automatically
+3. The old primary stack is torn down in the background
+4. A new standby is provisioned in the background to restore HA
+
+### Automatic failover via health poller
+
+The health poller runs in the background every 30 seconds, checking the Kong endpoint (`/rest/v1/`) of each active project.
+
+| Consecutive failures | Action |
+|---|---|
+| 1–2 | Increment `failure_streak`, log warning |
+| 3 | **Trigger failover** (primary/standby) or **cluster-failover** (cluster master) |
+
+Standby and replica projects are polled but never promoted by the poller — only primary/master projects trigger failover. Free-tier projects skip failover (streak is still tracked).
 
 ---
 
@@ -229,6 +334,7 @@ Generate all at once: `bash utils/generate-keys.sh`
 | `MULTI_HEAD_IMAGE` | `ghcr.io/flamingrubberduck/supabase-studio-multi-head:latest` | Studio Docker image |
 | `MULTI_HEAD_HOST` | `host.docker.internal` | Hostname at which extra project stacks are reachable from inside the Studio container |
 | `STUDIO_DATA_DIR` | `./volumes/studio-data` | Host path for `projects.json` project registry |
+| `MULTI_HEAD_LICENSE_SECRET` | *(unset)* | HMAC secret used to verify license key signatures |
 
 ### Port allocation for new projects
 
@@ -239,6 +345,41 @@ Each new project gets a port block offset by `+10`:
 | Kong (HTTP) | 8000 | 8010 | 8020 |
 | Postgres | 5432 | 5442 | 5452 |
 | Pooler (transaction) | 6543 | 6553 | 6563 |
+
+---
+
+## API reference
+
+All endpoints require HTTP Basic auth (`DASHBOARD_USERNAME` / `DASHBOARD_PASSWORD`).
+
+### Projects
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/platform/projects` | List all projects |
+| `POST` | `/api/platform/projects` | Create a project |
+| `GET` | `/api/platform/projects/:ref` | Get project details |
+| `DELETE` | `/api/platform/projects/:ref` | Delete a project |
+| `POST` | `/api/platform/projects/import` | Register an external stack |
+
+### High availability (Pro)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/platform/projects/:ref/replica` | Provision a read replica |
+| `DELETE` | `/api/platform/projects/:ref/replica` | Remove a replica (`?replica_ref=<ref>`) |
+| `POST` | `/api/platform/projects/:ref/standby` | Provision a hot standby |
+| `DELETE` | `/api/platform/projects/:ref/standby` | Remove the standby |
+| `POST` | `/api/platform/projects/:ref/failover` | Trigger primary → standby promotion |
+| `POST` | `/api/platform/projects/:ref/cluster-failover` | Promote best replica to master |
+
+### License
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/platform/license` | Get current tier and grace state |
+| `PATCH` | `/api/platform/license` | Activate a license key `{"key":"<jwt>"}` |
+| `DELETE` | `/api/platform/license` | Deactivate — revert to Free tier |
 
 ---
 
@@ -258,6 +399,48 @@ After pushing, update `MULTI_HEAD_IMAGE` in your `.env`:
 ```dotenv
 MULTI_HEAD_IMAGE=ghcr.io/<your-username>/supabase-studio-multi-head:latest
 ```
+
+---
+
+## Running tests
+
+### Unit tests (Vitest)
+
+Covers health poller, failover manager, cluster manager, and replication manager.
+
+```bash
+cd apps/studio
+./node_modules/.bin/vitest run lib/api/self-hosted/
+```
+
+### E2E tests
+
+Tests the full API surface against a running stack. Requires the stack to be up (`bash multihead/start.sh`).
+
+```bash
+# Run against default URL (http://localhost:8000)
+node multihead/tests/test-cluster-failover.mjs
+
+# Run against a different URL
+STUDIO_URL=http://myhost:8000 node multihead/tests/test-cluster-failover.mjs
+
+# Enable Pro flow (requires a valid license key)
+SMH_LICENSE_KEY=<your-key> node multihead/tests/test-cluster-failover.mjs
+```
+
+Credentials are auto-read from `docker/.env`. Set `DASHBOARD_USERNAME` / `DASHBOARD_PASSWORD` to override.
+
+**Test groups:**
+
+| Group | What's tested |
+|-------|--------------|
+| License API | GET/PATCH/DELETE `/api/platform/license` |
+| License gating | Pro-required endpoints return 402 on Free tier |
+| Replica API contract | Validation, missing params, method guards |
+| Standby API contract | Same checks for standby endpoints |
+| Failover API contract | POST /failover and /cluster-failover guards |
+| smh CLI basic | `list`, `license status/activate/deactivate`, `help` |
+| Pro flow *(optional)* | Full create → replica → standby → failover → cleanup cycle |
 
 ---
 
@@ -289,14 +472,16 @@ multihead/docker-compose.yml  (or overlay on existing stack)
 ├─ studio (multi-head image)
 │    ├─ mounts /var/run/docker.sock   → spawns new project stacks via Docker CLI
 │    ├─ reads  /app/studio-data       → project registry (projects.json)
-│    └─ uses   /app/supabase-docker/  → compose template baked into image
+│    ├─ uses   /app/supabase-docker/  → compose template baked into image
+│    └─ health poller                 → polls projects every 30 s, triggers failover
 │
 ├─ kong, auth, rest, realtime, storage, meta, analytics, db, supavisor
 │    └─ standard Supabase services (default project)
 │
 └─ extra project stacks (created on demand)
-     ├─ supabase-<ref>  port block +10
-     ├─ supabase-<ref>  port block +20
+     ├─ supabase-<ref>         master / primary      port block +10
+     ├─ supabase-<ref>-standby hot standby           port block +20
+     ├─ supabase-<ref>-r1      read replica rank 1   port block +30
      └─ ...
 ```
 
@@ -305,7 +490,9 @@ multihead/docker-compose.yml  (or overlay on existing stack)
 - **No Docker-in-Docker**: Studio uses the host Docker socket to run `docker compose` as a sibling. The `docker` CLI binary is embedded in the image.
 - **Template baked in**: The compose template is at `/app/supabase-docker/docker-compose.yml` inside the image. Override with `SUPABASE_COMPOSE_FILE`.
 - **Credential isolation**: Every project gets fresh `POSTGRES_PASSWORD`, `JWT_SECRET`, `ANON_KEY`, `SERVICE_ROLE_KEY` generated by `crypto.randomBytes`.
+- **Token continuity**: Standbys and replicas inherit the primary's JWT/anon/service keys so existing client tokens remain valid after failover.
 - **Import without restart**: The `/api/platform/projects/import` endpoint registers external stacks live — no container restart needed.
+- **Offline-friendly licensing**: License keys are signed JWTs verified with a local HMAC secret. No internet connection required after the key is stored.
 
 ---
 
@@ -318,3 +505,6 @@ multihead/docker-compose.yml  (or overlay on existing stack)
 | Extra project services unreachable | Wrong `MULTI_HEAD_HOST` — verify bridge IP on Linux |
 | Port conflict on new project | Edit `volumes/studio-data/projects.json`, change `kong_http_port`, restart Studio |
 | Reset everything | `docker compose down -v && rm -f volumes/studio-data/projects.json` |
+| API returns 401 | Pass Basic auth: `curl -u supabase:<password> …` or set `DASHBOARD_USERNAME`/`DASHBOARD_PASSWORD` |
+| Failover not triggering | Check `MULTI_HEAD_LICENSE_SECRET` is set and license is Pro tier (`smh license status`) |
+| Replica stuck in COMING_UP | Check Docker logs for `pg_basebackup` errors; verify Postgres is reachable on `postgres_port` |

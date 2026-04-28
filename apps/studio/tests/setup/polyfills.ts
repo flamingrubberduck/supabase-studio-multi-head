@@ -4,24 +4,27 @@ import { act } from '@testing-library/react'
 import { configMocks } from 'jsdom-testing-mocks'
 import { vi } from 'vitest'
 
-configMocks({ act })
+// Skip browser-only polyfills when running in a Node test environment
+if (typeof window !== 'undefined') {
+  configMocks({ act })
 
-// Warning: `restoreMocks: true` in vitest.config.ts will
-// cause this global mockImplementation to be **reset**
-// before any tests are run!
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: vi.fn().mockImplementation((query) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(), // deprecated
-    removeListener: vi.fn(), // deprecated
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
-})
+  // Warning: `restoreMocks: true` in vitest.config.ts will
+  // cause this global mockImplementation to be **reset**
+  // before any tests are run!
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(), // deprecated
+      removeListener: vi.fn(), // deprecated
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+}
 
 Object.defineProperties(globalThis, {
   TextDecoder: { value: TextDecoder },
@@ -36,4 +39,6 @@ Object.defineProperties(globalThis, {
   TransformStream: { value: TransformStream },
 })
 
-window.HTMLElement.prototype.hasPointerCapture = vi.fn()
+if (typeof window !== 'undefined') {
+  window.HTMLElement.prototype.hasPointerCapture = vi.fn()
+}
