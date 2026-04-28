@@ -55,4 +55,4 @@ apps/studio/.studio-data/
 # Screenshots and local UI experiments
 Screenshot*.png
 Screenshot*.png:Zone.Identifier
-UI/
+UI/docker/volumes/studio-data/
