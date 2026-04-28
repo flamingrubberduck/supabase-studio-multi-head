@@ -7,11 +7,11 @@
  *
  * Environment:
  *   STUDIO_URL        Studio base URL (default: http://localhost:8000)
- *   SMH_LICENSE_KEY   Pro license key (if set, activates Pro for the full suite)
+ *   SMH_LICENSE_KEY   Business/Enterprise license key (if set, activates paid tier for the full suite)
  *
  * Test groups:
  *   1. License API          — GET/POST/DELETE /api/platform/license
- *   2. License gating       — Pro-required endpoints return 402 on Free tier
+ *   2. License gating       — Business/Enterprise-required endpoints return 402 on Free tier
  *   3. Replica API contract — validation, missing params, project-not-found
  *   4. Standby API contract — same checks for standby endpoints
  *   5. Failover API contract— POST /failover and /cluster-failover guards
@@ -140,7 +140,7 @@ async function testLicenseApi() {
   const { status, data } = await req('GET', '/api/platform/license')
   check('GET /api/platform/license returns 200', status, 200)
   check('response has tier field', typeof data?.tier, 'string')
-  check('tier is free or pro', ['free', 'pro'].includes(data?.tier), true)
+  check('tier is a valid tier', ['free', 'business', 'enterprise'].includes(data?.tier), true)
   check('response has grace field', typeof data?.grace, 'boolean')
 
   // PATCH with missing key
@@ -193,7 +193,7 @@ async function testLicenseGating() {
     const label = `${ep.method} ${ep.path.replace('/api/platform/projects/default', '')}`
     if (status === 402) {
       check(`${label} returns 402 on Free tier`, status, 402)
-      checkIncludes(`${label} error mentions Pro`, data?.error?.message ?? data?.message ?? '', 'Pro')
+      checkIncludes(`${label} error mentions license tier`, data?.error?.message ?? data?.message ?? '', 'license')
     } else if (status === 400 || status === 404 || status === 409) {
       // endpoint reached validation (no 402) — means license check passed or not implemented
       skipTest(`${label} — no license gate (got ${status})`)
@@ -228,7 +228,7 @@ async function testReplicaApiContract() {
   await req('DELETE', '/api/platform/license')  // ensure Free
   const cliAdd = smh('replica', 'add', 'default')
   check('smh replica add exits 1 on Free tier', cliAdd.ok, false)
-  checkIncludes('smh replica add mentions Pro', cliAdd.output, 'Pro')
+  checkIncludes('smh replica add mentions license', cliAdd.output, 'license')
 
   // smh CLI: replica remove missing args → exits 1
   const cliRemove = smh('replica', 'remove')
@@ -256,7 +256,7 @@ async function testStandbyApiContract() {
   // smh CLI: standby add without Pro → exits 1
   const cliAdd = smh('standby', 'add', 'default')
   check('smh standby add exits 1 on Free tier', cliAdd.ok, false)
-  checkIncludes('smh standby add mentions Pro', cliAdd.output, 'Pro')
+  checkIncludes('smh standby add mentions license', cliAdd.output, 'license')
 
   // smh CLI: standby remove missing args → exits 1
   const cliRemove = smh('standby', 'remove')
@@ -287,12 +287,12 @@ async function testFailoverApiContract() {
   // smh CLI: failover without Pro → exits 1
   const cliFail = smh('failover', 'default')
   check('smh failover exits 1 on Free tier', cliFail.ok, false)
-  checkIncludes('smh failover mentions Pro', cliFail.output, 'Pro')
+  checkIncludes('smh failover mentions license', cliFail.output, 'license')
 
   // smh CLI: cluster-failover without Pro → exits 1
   const cliCF = smh('cluster-failover', 'default')
   check('smh cluster-failover exits 1 on Free tier', cliCF.ok, false)
-  checkIncludes('smh cluster-failover mentions Pro', cliCF.output, 'Pro')
+  checkIncludes('smh cluster-failover mentions license', cliCF.output, 'license')
 
   // smh CLI: failover missing ref → exits 1
   const cliNoRef = smh('failover')
@@ -326,8 +326,8 @@ async function testSmhCliBasic() {
 
 async function testProFlow() {
   if (!LIC_KEY) {
-    console.log('\n--- Pro flow (SKIPPED — set SMH_LICENSE_KEY to enable) ---')
-    skipTest('activate Pro license')
+    console.log('\n--- Paid flow (SKIPPED — set SMH_LICENSE_KEY to enable) ---')
+    skipTest('activate license')
     skipTest('create project for cluster test')
     skipTest('smh replica add → API returns 202')
     skipTest('smh standby add → API returns 202')
@@ -341,15 +341,15 @@ async function testProFlow() {
     return
   }
 
-  console.log('\n--- Pro flow (full E2E with license key) ---')
+  console.log('\n--- Paid flow (full E2E with license key) ---')
 
   // Activate license
   const { status: licSt, data: licData } = await req('PATCH', '/api/platform/license', { key: LIC_KEY })
-  check('activate Pro license returns 200', licSt, 200)
-  check('tier is pro after activation', licData?.tier, 'pro')
+  check('activate license returns 200', licSt, 200)
+  check('tier is paid after activation', ['business', 'enterprise'].includes(licData?.tier), true)
 
   const cliLic = smh('license', 'status')
-  checkIncludes('smh license status shows pro', cliLic.output, 'pro')
+  checkIncludes('smh license status shows tier', cliLic.output, 'tier')
 
   // Create a test project for replica/failover tests
   let projectRef

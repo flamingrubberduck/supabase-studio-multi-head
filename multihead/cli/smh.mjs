@@ -214,7 +214,7 @@ async function cmdReplicaAdd(ref, dockerHost) {
   console.log(`Provisioning replica for ${ref}…`)
   const body = dockerHost ? { docker_host: dockerHost } : {}
   const { status, data } = await plat('POST', ref, '/replica', body, { allowNonOk: true })
-  if (status === 402) die(`Pro license required: ${data?.error?.message ?? data?.message}`)
+  if (status === 402) die(`License required: ${data?.error?.message ?? data?.message}`)
   if (!String(status).startsWith('2')) die(data?.error?.message ?? data?.message ?? JSON.stringify(data))
   ok(`Replica provisioning started  replica_ref=${data.replica_ref}`)
   console.log(`  Status: ${data.status}`)
@@ -236,7 +236,7 @@ async function cmdStandbyAdd(ref, dockerHost) {
   console.log(`Provisioning standby for ${ref}…`)
   const body = dockerHost ? { docker_host: dockerHost } : {}
   const { status, data } = await plat('POST', ref, '/standby', body, { allowNonOk: true })
-  if (status === 402) die(`Pro license required: ${data?.error?.message ?? data?.message}`)
+  if (status === 402) die(`License required: ${data?.error?.message ?? data?.message}`)
   if (!String(status).startsWith('2')) die(data?.error?.message ?? data?.message ?? JSON.stringify(data))
   ok(`Standby provisioning started  standby_ref=${data.standby_ref}`)
   console.log(`  Status: ${data.status}`)
@@ -257,7 +257,7 @@ async function cmdFailover(ref) {
   if (!ref) die('Usage: smh failover <ref>')
   console.log(`Triggering failover for ${ref}…`)
   const { status, data } = await plat('POST', ref, '/failover', {}, { allowNonOk: true })
-  if (status === 402) die(`Pro license required: ${data?.error?.message ?? data?.message}`)
+  if (status === 402) die(`License required: ${data?.error?.message ?? data?.message}`)
   if (!String(status).startsWith('2')) die(data?.error?.message ?? data?.message ?? JSON.stringify(data))
   ok('Failover complete')
   console.log(`  New URL:        ${data.public_url}`)
@@ -271,7 +271,7 @@ async function cmdClusterFailover(ref) {
   if (!ref) die('Usage: smh cluster-failover <ref>')
   console.log(`Triggering cluster failover for ${ref}…`)
   const { status, data } = await plat('POST', ref, '/cluster-failover', {}, { allowNonOk: true })
-  if (status === 402) die(`Pro license required: ${data?.error?.message ?? data?.message}`)
+  if (status === 402) die(`License required: ${data?.error?.message ?? data?.message}`)
   if (!String(status).startsWith('2')) die(data?.error?.message ?? data?.message ?? JSON.stringify(data))
   ok('Cluster failover complete')
   console.log(`  New URL: ${data.public_url}`)
@@ -282,8 +282,9 @@ async function cmdClusterFailover(ref) {
 async function cmdLicenseStatus() {
   const { status, data } = await request('GET', LIC_API, undefined, { allowNonOk: true })
   if (!String(status).startsWith('2')) die(data?.error?.message ?? data?.message ?? JSON.stringify(data))
-  const tier = data.tier === 'pro' ? '\x1b[32mpro\x1b[0m' : '\x1b[33mfree\x1b[0m'
-  console.log(`tier:  ${tier}`)
+  const TIER_COLOR = { enterprise: '\x1b[35m', business: '\x1b[32m' }
+  const color = TIER_COLOR[data.tier] ?? '\x1b[33m'
+  console.log(`tier:  ${color}${data.tier ?? 'free'}\x1b[0m`)
   if (data.email) console.log(`email: ${data.email}`)
   if (data.grace) console.log(`\x1b[33mWarning:\x1b[0m License server unreachable — running in grace period`)
 }
@@ -292,7 +293,7 @@ async function cmdLicenseActivate(key) {
   if (!key) die('Usage: smh license activate <key>')
   const { status, data } = await request('PATCH', LIC_API, { key }, { allowNonOk: true })
   if (!String(status).startsWith('2')) die(data?.error?.message ?? data?.message ?? JSON.stringify(data))
-  ok(`License activated — ${data.tier ?? 'pro'} tier`)
+  ok(`License activated — ${data.tier ?? 'business'} tier`)
   if (data.email) console.log(`  Email: ${data.email}`)
 }
 

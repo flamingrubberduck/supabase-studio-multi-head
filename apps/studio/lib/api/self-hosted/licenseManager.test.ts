@@ -16,6 +16,7 @@ function makeJwt(payload: Record<string, unknown>, secret = SECRET): string {
 
 async function freshModule() {
   delete (globalThis as any).__licenseInitialized
+  delete (globalThis as any).__licenseState
   vi.resetModules()
   return import('./licenseManager')
 }
@@ -42,6 +43,7 @@ describe('licenseManager', () => {
     }
     fs.rmSync(tmpDir, { recursive: true, force: true })
     delete (globalThis as any).__licenseInitialized
+    delete (globalThis as any).__licenseState
   })
 
   // ── Self-hosted (no license server) ────────────────────────────────────────

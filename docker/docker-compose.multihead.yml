@@ -41,3 +41,7 @@ services:
       # Supavisor pooler settings for the default project (used for connection strings)
       POOLER_TENANT_ID: ${POOLER_TENANT_ID}
       POOLER_PROXY_PORT_TRANSACTION: ${POOLER_PROXY_PORT_TRANSACTION:-6543}
+      # License validation — omit MULTI_HEAD_LICENSE_SERVER_URL for self-hosted (auto-Enterprise)
+      MULTI_HEAD_LICENSE_SECRET: ${MULTI_HEAD_LICENSE_SECRET:-}
+      MULTI_HEAD_LICENSE_KEY: ${MULTI_HEAD_LICENSE_KEY:-}
+      MULTI_HEAD_LICENSE_SERVER_URL: ${MULTI_HEAD_LICENSE_SERVER_URL:-}

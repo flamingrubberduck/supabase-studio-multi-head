@@ -7,6 +7,8 @@ docker
 # Un-ignore the compose template baked into the Studio image
 !docker/docker-compose.yml
 !docker/volumes
+# Exclude postgres data directory (owned by postgres, not readable by build user)
+docker/volumes/db
 examples
 i18n
 **/node_modules

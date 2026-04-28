@@ -97,6 +97,10 @@ services:
       # SUPABASE_COMPOSE_FILE defaults to /app/supabase-docker/docker-compose.yml (baked into image)
       # Override here only if you want to use a custom compose template:
       # SUPABASE_COMPOSE_FILE: /your/custom/docker-compose.yml
+      # License validation — omit MULTI_HEAD_LICENSE_SERVER_URL for self-hosted (auto-Enterprise)
+      MULTI_HEAD_LICENSE_SECRET: ${MULTI_HEAD_LICENSE_SECRET:-}
+      MULTI_HEAD_LICENSE_KEY: ${MULTI_HEAD_LICENSE_KEY:-}
+      MULTI_HEAD_LICENSE_SERVER_URL: ${MULTI_HEAD_LICENSE_SERVER_URL:-}
 
   kong:
     container_name: supabase-kong

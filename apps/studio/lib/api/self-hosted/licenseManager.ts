@@ -9,7 +9,7 @@ export type LicenseTier = 'free' | 'business' | 'enterprise'
 const TIER_RANK: Record<LicenseTier, number> = { free: 0, business: 1, enterprise: 2 }
 
 function meetsOrExceedsTier(required: LicenseTier): boolean {
-  return TIER_RANK[currentTier] >= TIER_RANK[required]
+  return TIER_RANK[state.tier] >= TIER_RANK[required]
 }
 
 // ── Feature → minimum tier registry ──────────────────────────────────────────
@@ -33,13 +33,36 @@ const FEATURE_TIER: Record<Feature, LicenseTier> = {
   'cluster-failover': 'enterprise',
 }
 
-// ── In-process state ─────────────────────────────────────────────────────────
+// ── In-process state ──────────────────────────────────────────────────────────
+// Stored on globalThis so the instrumentation context and API-route module
+// context (which Next.js 15+ runs in separate module instances) share state.
 
-let currentTier: LicenseTier = 'free'
-let graceDeadline = 0
-let inGrace = false
-let activeLicenseKey: string | null = null
-let pollingInterval: ReturnType<typeof setInterval> | null = null
+declare global {
+  // eslint-disable-next-line no-var
+  var __licenseState:
+    | {
+        tier: LicenseTier
+        graceDeadline: number
+        inGrace: boolean
+        activeLicenseKey: string | null
+        pollingInterval: ReturnType<typeof setInterval> | null
+      }
+    | undefined
+  // eslint-disable-next-line no-var
+  var __licenseInitialized: boolean | undefined
+}
+
+if (!globalThis.__licenseState) {
+  globalThis.__licenseState = {
+    tier: 'free',
+    graceDeadline: 0,
+    inGrace: false,
+    activeLicenseKey: null,
+    pollingInterval: null,
+  }
+}
+
+const state = globalThis.__licenseState
 
 const GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
@@ -135,17 +158,16 @@ async function checkLicenseServer(key: string): Promise<void> {
     const body = (await res.json()) as { active?: boolean; tier?: string }
 
     if (body.active === true) {
-      // Server may return an upgraded tier (e.g. free → business promotion).
       const serverTier = normalizeTier(body.tier)
-      if (serverTier) currentTier = serverTier
-      graceDeadline = Date.now() + GRACE_PERIOD_MS
-      inGrace = false
-      console.log(`[license] ${currentTier} license confirmed by server.`)
+      if (serverTier) state.tier = serverTier
+      state.graceDeadline = Date.now() + GRACE_PERIOD_MS
+      state.inGrace = false
+      console.log(`[license] ${state.tier} license confirmed by server.`)
     } else {
-      currentTier = 'free'
-      graceDeadline = 0
-      inGrace = false
-      activeLicenseKey = null
+      state.tier = 'free'
+      state.graceDeadline = 0
+      state.inGrace = false
+      state.activeLicenseKey = null
       clearPersistedKey()
       console.warn('[license] License revoked by server — downgrading to Free tier.')
     }
@@ -155,16 +177,16 @@ async function checkLicenseServer(key: string): Promise<void> {
 }
 
 function applyUnreachable(): void {
-  if (graceDeadline > 0 && Date.now() < graceDeadline) {
-    inGrace = true
-    const daysLeft = Math.ceil((graceDeadline - Date.now()) / (24 * 60 * 60 * 1000))
+  if (state.graceDeadline > 0 && Date.now() < state.graceDeadline) {
+    state.inGrace = true
+    const daysLeft = Math.ceil((state.graceDeadline - Date.now()) / (24 * 60 * 60 * 1000))
     console.warn(
-      `[license] License server unreachable — grace period active (${daysLeft}d remaining). Keeping ${currentTier} tier.`
+      `[license] License server unreachable — grace period active (${daysLeft}d remaining). Keeping ${state.tier} tier.`
     )
   } else {
-    inGrace = false
-    if (currentTier !== 'free') {
-      currentTier = 'free'
+    state.inGrace = false
+    if (state.tier !== 'free') {
+      state.tier = 'free'
       console.warn(
         '[license] License server unreachable and grace period expired — downgrading to Free tier.'
       )
@@ -175,27 +197,30 @@ function applyUnreachable(): void {
 // ── Internal: start polling ───────────────────────────────────────────────────
 
 function startPolling(key: string): void {
-  if (pollingInterval) clearInterval(pollingInterval)
+  if (state.pollingInterval) clearInterval(state.pollingInterval)
   checkLicenseServer(key).catch(console.error)
-  pollingInterval = setInterval(() => checkLicenseServer(key).catch(console.error), CHECK_INTERVAL_MS)
+  state.pollingInterval = setInterval(
+    () => checkLicenseServer(key).catch(console.error),
+    CHECK_INTERVAL_MS
+  )
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export function getLicenseTier(): LicenseTier {
-  return currentTier
+  return state.tier
 }
 
 export function getLicenseStatus(): { tier: LicenseTier; grace: boolean; email?: string } {
   let email: string | undefined
-  if (activeLicenseKey) {
+  if (state.activeLicenseKey) {
     const secret = process.env.MULTI_HEAD_LICENSE_SECRET
     if (secret) {
-      const payload = verifyJwt(activeLicenseKey, secret)
+      const payload = verifyJwt(state.activeLicenseKey, secret)
       email = payload?.email ?? payload?.issued_to
     }
   }
-  return { tier: currentTier, grace: inGrace, ...(email ? { email } : {}) }
+  return { tier: state.tier, grace: state.inGrace, ...(email ? { email } : {}) }
 }
 
 /**
@@ -235,8 +260,8 @@ export async function activateLicenseKey(key: string): Promise<string | null> {
     return `License tier "${payload.tier}" does not unlock paid features.`
   }
 
-  activeLicenseKey = key
-  currentTier = tier
+  state.activeLicenseKey = key
+  state.tier = tier
   persistKey(key)
 
   console.log(
@@ -251,21 +276,16 @@ export async function activateLicenseKey(key: string): Promise<string | null> {
  * Removes the active license key and downgrades to Free tier.
  */
 export function deactivateLicense(): void {
-  if (pollingInterval) {
-    clearInterval(pollingInterval)
-    pollingInterval = null
+  if (state.pollingInterval) {
+    clearInterval(state.pollingInterval)
+    state.pollingInterval = null
   }
-  activeLicenseKey = null
-  currentTier = 'free'
-  graceDeadline = 0
-  inGrace = false
+  state.activeLicenseKey = null
+  state.tier = 'free'
+  state.graceDeadline = 0
+  state.inGrace = false
   clearPersistedKey()
   console.log('[license] License deactivated — running as Free tier.')
-}
-
-declare global {
-  // eslint-disable-next-line no-var
-  var __licenseInitialized: boolean | undefined
 }
 
 /**
@@ -278,7 +298,7 @@ export function initLicense(): void {
 
   // No license server configured → self-hosted instance, grant Enterprise automatically.
   if (!process.env.MULTI_HEAD_LICENSE_SERVER_URL) {
-    currentTier = 'enterprise'
+    state.tier = 'enterprise'
     console.log('[license] No license server configured — running as Enterprise (self-hosted).')
     return
   }
@@ -307,8 +327,8 @@ export function initLicense(): void {
     return
   }
 
-  activeLicenseKey = key
-  currentTier = tier
+  state.activeLicenseKey = key
+  state.tier = tier
   console.log(
     `[license] License key valid — ${tier} tier (issued to: ${payload.email ?? payload.issued_to ?? 'unknown'}). Confirming with server...`
   )
