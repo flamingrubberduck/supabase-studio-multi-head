@@ -155,6 +155,47 @@
     .audience-list li { display: flex; gap: 12px; align-items: flex-start; font-size: 15px; color: var(--muted); }
     .audience-list li::before { content: "→"; color: var(--green); flex-shrink: 0; font-weight: 700; }
 
+    /* Pricing */
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px; margin-top: 32px;
+    }
+    .pricing-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 28px 24px;
+      display: flex; flex-direction: column; gap: 20px;
+    }
+    .pricing-card.highlighted { border-color: rgba(62,207,142,0.4); }
+    .pricing-card.enterprise  { border-color: rgba(167,139,250,0.4); }
+    .pricing-tier { font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+    .pricing-tier.t-free     { color: var(--muted); }
+    .pricing-tier.t-business { color: var(--green); }
+    .pricing-tier.t-enterprise { color: #a78bfa; }
+    .pricing-price { font-size: 32px; font-weight: 800; color: var(--text); line-height: 1; }
+    .pricing-price span { font-size: 14px; font-weight: 400; color: var(--muted); }
+    .pricing-desc { font-size: 13px; color: var(--muted); margin: 0; }
+    .pricing-features { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .pricing-features li { font-size: 13px; color: var(--muted); display: flex; gap: 8px; }
+    .pricing-features li::before { content: "✓"; color: var(--green); font-weight: 700; flex-shrink: 0; }
+    .pricing-features li.dim::before { color: #4a5568; content: "–"; }
+    .pricing-features li.dim { color: #4a5568; }
+    .pricing-cta {
+      margin-top: auto; display: inline-flex; align-items: center; justify-content: center;
+      padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: opacity .15s; text-decoration: none;
+    }
+    .pricing-cta:hover { opacity: .85; text-decoration: none; }
+    .pricing-cta.c-free     { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .pricing-cta.c-business { background: var(--green); color: #061a0e; }
+    .pricing-cta.c-enterprise { background: #a78bfa; color: #1a0a2e; }
+    .arr-note {
+      margin-top: 20px; padding: 14px 18px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); font-size: 13px; color: var(--muted);
+    }
+    .arr-note strong { color: var(--text); }
+
     /* CTA bottom */
     .cta-bottom { padding: 72px 0; text-align: center; border-top: 1px solid var(--border); }
     .cta-bottom h2 { margin-bottom: 12px; }
@@ -247,8 +288,13 @@
       </div>
       <div class="feature-card">
         <div class="feature-icon">⚡</div>
-        <h3>Standby &amp; failover <span style="font-size:11px;color:var(--green);font-weight:600;">PRO</span></h3>
+        <h3>Standby &amp; failover <span style="font-size:11px;color:var(--green);font-weight:600;">BUSINESS</span></h3>
         <p>Provision warm standbys and trigger failover with one click. WAL streaming replication included.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🏗️</div>
+        <h3>Cluster mode <span style="font-size:11px;color:#a78bfa;font-weight:600;">ENTERPRISE</span></h3>
+        <p>One writable master with read replicas. Auto-promotes the highest-priority healthy replica on failure.</p>
       </div>
     </div>
   </div>
@@ -366,7 +412,13 @@ cd multihead &amp;&amp; bash start.sh</pre>
             <td>Standby / failover</td>
             <td class="yes">✓ Pro plan</td>
             <td class="no">✗</td>
-            <td class="yes">✓ Pro tier</td>
+            <td class="yes">✓ Business+</td>
+          </tr>
+          <tr>
+            <td>Read replica cluster</td>
+            <td class="yes">✓ Pro plan</td>
+            <td class="no">✗</td>
+            <td class="yes">✓ Enterprise</td>
           </tr>
           <tr>
             <td>Data ownership</td>
@@ -389,30 +441,72 @@ cd multihead &amp;&amp; bash start.sh</pre>
 <section class="section" id="pricing">
   <div class="container">
     <div class="section-label">Pricing</div>
-    <h2>Free to start. Pay when you need more.</h2>
-    <div class="features">
-      <div class="feature-card">
-        <h3 style="font-size:18px;margin-bottom:8px;">Free</h3>
-        <p style="font-size:28px;font-weight:800;color:var(--text);margin-bottom:16px;">$0</p>
-        <ul style="list-style:none;display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted);">
-          <li>✓ Unlimited projects</li>
-          <li>✓ Full Supabase Studio UI</li>
-          <li>✓ Import remote stacks</li>
-          <li>✓ Self-hosted, your server</li>
+    <h2>Free to start. Scale when you need to.</h2>
+    <div class="pricing-grid">
+
+      <!-- Free -->
+      <div class="pricing-card">
+        <div>
+          <div class="pricing-tier t-free">Free</div>
+          <div class="pricing-price" style="margin:10px 0 6px;">$0</div>
+          <p class="pricing-desc">For individuals and teams under $2M ARR.</p>
+        </div>
+        <ul class="pricing-features">
+          <li>Unlimited projects from the UI</li>
+          <li>Full Supabase Studio interface</li>
+          <li>Import &amp; browse remote stacks</li>
+          <li>Self-hosted on your own server</li>
+          <li class="dim">Failover &amp; standby</li>
+          <li class="dim">Read replica cluster</li>
+          <li class="dim">Support SLA</li>
         </ul>
+        <a class="pricing-cta c-free" href="#quickstart">Get started free</a>
       </div>
-      <div class="feature-card" style="border-color:rgba(62,207,142,0.35);">
-        <h3 style="font-size:18px;margin-bottom:8px;">Pro <span style="font-size:11px;font-weight:600;color:var(--green);background:var(--green-dim);padding:2px 8px;border-radius:999px;">Coming soon</span></h3>
-        <p style="font-size:28px;font-weight:800;color:var(--text);margin-bottom:16px;">TBA</p>
-        <ul style="list-style:none;display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--muted);">
-          <li>✓ Everything in Free</li>
-          <li>✓ Warm standby provisioning</li>
-          <li>✓ One-click failover</li>
-          <li>✓ WAL streaming replication</li>
-          <li>✓ Read replica cluster mode</li>
-          <li>✓ Priority support</li>
+
+      <!-- Business -->
+      <div class="pricing-card highlighted">
+        <div>
+          <div class="pricing-tier t-business">Business</div>
+          <div class="pricing-price" style="margin:10px 0 6px;">$299 <span>/ mo</span></div>
+          <p class="pricing-desc">For growing teams that need high availability.</p>
+        </div>
+        <ul class="pricing-features">
+          <li>Everything in Free</li>
+          <li>Warm standby provisioning</li>
+          <li>One-click manual failover</li>
+          <li>Auto-failover on health failures</li>
+          <li>WAL streaming replication</li>
+          <li>Email support &amp; 48 h SLA</li>
+          <li class="dim">Read replica cluster</li>
+          <li class="dim">Dedicated engineer</li>
         </ul>
+        <a class="pricing-cta c-business" href="mailto:nautilux2@gmail.com?subject=Business license">Get a license key</a>
       </div>
+
+      <!-- Enterprise -->
+      <div class="pricing-card enterprise">
+        <div>
+          <div class="pricing-tier t-enterprise">Enterprise</div>
+          <div class="pricing-price" style="margin:10px 0 6px;">$1,200 <span>/ mo</span></div>
+          <p class="pricing-desc">For teams that need full cluster orchestration and dedicated support.</p>
+        </div>
+        <ul class="pricing-features">
+          <li>Everything in Business</li>
+          <li>Read replica cluster mode</li>
+          <li>Cluster-level auto-failover</li>
+          <li>Multi-host replica placement</li>
+          <li>Dedicated engineer onboarding</li>
+          <li>24 / 7 support &amp; custom SLA</li>
+          <li>Custom invoicing &amp; MSA</li>
+        </ul>
+        <a class="pricing-cta c-enterprise" href="mailto:nautilux2@gmail.com?subject=Enterprise license">Contact us</a>
+      </div>
+
+    </div>
+    <div class="arr-note">
+      <strong>Free threshold:</strong> organizations with less than <strong>$2,000,000 USD ARR</strong> directly
+      attributable to products using Multi-Head Studio may use it at no charge.
+      See the <a href="https://github.com/flamingrubberduck/supabase-studio-multi-head/blob/master/LICENSE">LICENSE</a> for full terms.
     </div>
   </div>
 </section>
