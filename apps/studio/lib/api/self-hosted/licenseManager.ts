@@ -2,7 +2,36 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 
-export type LicenseTier = 'free' | 'pro'
+export type LicenseTier = 'free' | 'business' | 'enterprise'
+
+// ── Tier hierarchy ────────────────────────────────────────────────────────────
+
+const TIER_RANK: Record<LicenseTier, number> = { free: 0, business: 1, enterprise: 2 }
+
+function meetsOrExceedsTier(required: LicenseTier): boolean {
+  return TIER_RANK[currentTier] >= TIER_RANK[required]
+}
+
+// ── Feature → minimum tier registry ──────────────────────────────────────────
+
+export type Feature =
+  | 'multi-project'
+  | 'standby'
+  | 'failover'
+  | 'replica'
+  | 'auto-failover'
+  | 'cluster'
+  | 'cluster-failover'
+
+const FEATURE_TIER: Record<Feature, LicenseTier> = {
+  'multi-project':  'business',
+  standby:          'business',
+  failover:         'business',
+  replica:          'business',
+  'auto-failover':  'business',
+  cluster:          'enterprise',
+  'cluster-failover': 'enterprise',
+}
 
 // ── In-process state ─────────────────────────────────────────────────────────
 
@@ -78,6 +107,13 @@ function verifyJwt(token: string, secret: string): LicensePayload | null {
   }
 }
 
+// Normalize JWT tier strings to LicenseTier — 'pro' is a legacy alias for 'business'.
+function normalizeTier(raw: string | undefined): LicenseTier | null {
+  if (raw === 'enterprise') return 'enterprise'
+  if (raw === 'business' || raw === 'pro') return 'business'
+  return null
+}
+
 // ── License server check ──────────────────────────────────────────────────────
 
 async function checkLicenseServer(key: string): Promise<void> {
@@ -96,13 +132,15 @@ async function checkLicenseServer(key: string): Promise<void> {
       return
     }
 
-    const body = (await res.json()) as { active?: boolean }
+    const body = (await res.json()) as { active?: boolean; tier?: string }
 
     if (body.active === true) {
-      currentTier = 'pro'
+      // Server may return an upgraded tier (e.g. free → business promotion).
+      const serverTier = normalizeTier(body.tier)
+      if (serverTier) currentTier = serverTier
       graceDeadline = Date.now() + GRACE_PERIOD_MS
       inGrace = false
-      console.log('[license] Pro license confirmed by server.')
+      console.log(`[license] ${currentTier} license confirmed by server.`)
     } else {
       currentTier = 'free'
       graceDeadline = 0
@@ -125,7 +163,7 @@ function applyUnreachable(): void {
     )
   } else {
     inGrace = false
-    if (currentTier === 'pro') {
+    if (currentTier !== 'free') {
       currentTier = 'free'
       console.warn(
         '[license] License server unreachable and grace period expired — downgrading to Free tier.'
@@ -160,13 +198,23 @@ export function getLicenseStatus(): { tier: LicenseTier; grace: boolean; email?:
   return { tier: currentTier, grace: inGrace, ...(email ? { email } : {}) }
 }
 
-export function requirePro(): { ok: boolean; message?: string } {
-  if (currentTier === 'pro') return { ok: true }
+/**
+ * Returns ok:true if the current tier satisfies the required tier for a feature.
+ * Use this at API route boundaries.
+ */
+export function requireTier(feature: Feature): { ok: boolean; message?: string } {
+  const required = FEATURE_TIER[feature]
+  if (meetsOrExceedsTier(required)) return { ok: true }
+  const label = required === 'enterprise' ? 'Enterprise' : 'Business'
   return {
     ok: false,
-    message:
-      'This feature requires a Pro license. Add your license key in Organization Settings → License.',
+    message: `This feature requires a ${label} license. Contact nautilux2@gmail.com to upgrade.`,
   }
+}
+
+/** @deprecated Use requireTier(feature) instead. */
+export function requirePro(): { ok: boolean; message?: string } {
+  return requireTier('failover')
 }
 
 /**
@@ -181,14 +229,18 @@ export async function activateLicenseKey(key: string): Promise<string | null> {
 
   const payload = verifyJwt(key, secret)
   if (!payload) return 'Invalid license key — signature verification failed.'
-  if (payload.tier !== 'pro') return `License tier "${payload.tier}" does not include Pro features.`
+
+  const tier = normalizeTier(payload.tier)
+  if (!tier || tier === 'free') {
+    return `License tier "${payload.tier}" does not unlock paid features.`
+  }
 
   activeLicenseKey = key
-  currentTier = 'pro'
+  currentTier = tier
   persistKey(key)
 
   console.log(
-    `[license] Key activated via dashboard (issued to: ${payload.email ?? payload.issued_to ?? 'unknown'}).`
+    `[license] ${tier} key activated via dashboard (issued to: ${payload.email ?? payload.issued_to ?? 'unknown'}).`
   )
 
   startPolling(key)
@@ -224,6 +276,13 @@ export function initLicense(): void {
   if (globalThis.__licenseInitialized) return
   globalThis.__licenseInitialized = true
 
+  // No license server configured → self-hosted instance, grant Enterprise automatically.
+  if (!process.env.MULTI_HEAD_LICENSE_SERVER_URL) {
+    currentTier = 'enterprise'
+    console.log('[license] No license server configured — running as Enterprise (self-hosted).')
+    return
+  }
+
   const secret = process.env.MULTI_HEAD_LICENSE_SECRET
   if (!secret) {
     console.warn('[license] MULTI_HEAD_LICENSE_SECRET not set — running as Free tier.')
@@ -242,15 +301,16 @@ export function initLicense(): void {
     return
   }
 
-  if (payload.tier !== 'pro') {
+  const tier = normalizeTier(payload.tier)
+  if (!tier || tier === 'free') {
     console.log(`[license] License tier: ${payload.tier ?? 'unknown'}. Running as Free tier.`)
     return
   }
 
   activeLicenseKey = key
-  currentTier = 'pro'
+  currentTier = tier
   console.log(
-    `[license] License key valid (issued to: ${payload.email ?? payload.issued_to ?? 'unknown'}). Confirming with server...`
+    `[license] License key valid — ${tier} tier (issued to: ${payload.email ?? payload.issued_to ?? 'unknown'}). Confirming with server...`
   )
   startPolling(key)
 }

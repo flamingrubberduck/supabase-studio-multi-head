@@ -35,7 +35,7 @@ export function FailoverSection() {
   const { data: _project } = useSelectedProjectQuery()
   const project = _project as unknown as FailoverProject | undefined
   const { data: license } = useLicenseQuery()
-  const isPro = license?.tier === 'pro'
+  const isBusiness = license?.tier === 'business' || license?.tier === 'enterprise'
 
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [confirmFailover, setConfirmFailover] = useState(false)
@@ -123,8 +123,8 @@ export function FailoverSection() {
                 </div>
 
                 <div className="flex gap-2 shrink-0">
-                  {!isPro ? (
-                    <ProUpgradePrompt featureName="Failover standby" />
+                  {!isBusiness ? (
+                    <ProUpgradePrompt featureName="Failover standby" requiredTier="business" />
                   ) : hasStandby ? (
                     <>
                       <Button

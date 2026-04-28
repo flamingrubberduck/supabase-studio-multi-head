@@ -49,7 +49,7 @@ export function ClusterSection() {
   const [showAddForm, setShowAddForm] = useState(false)
 
   const { data: license } = useLicenseQuery()
-  const isPro = license?.tier === 'pro'
+  const isEnterprise = license?.tier === 'enterprise'
 
   const ref = project?.ref ?? ''
   const replicas: ReplicaEntry[] = (project as any)?.replicas ?? []
@@ -160,7 +160,7 @@ export function ClusterSection() {
                               type="text"
                               icon={<Trash size={14} />}
                               onClick={() => setRemovingRef(r.ref)}
-                              disabled={isBusy || !isPro}
+                              disabled={isBusy || !isEnterprise}
                             />
                           </td>
                         </tr>
@@ -172,8 +172,8 @@ export function ClusterSection() {
           </Card>
 
           {/* Add replica / failover controls */}
-          {!isPro ? (
-            <ProUpgradePrompt featureName="Cluster mode" />
+          {!isEnterprise ? (
+            <ProUpgradePrompt featureName="Cluster mode" requiredTier="enterprise" />
           ) : showAddForm ? (
             <div className="flex items-center gap-2">
               <Input_Shadcn_

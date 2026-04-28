@@ -1,3 +1,98 @@
+Supabase Studio Multi-Head — Sustainable Use License
+Version 1.1
+Copyright (c) 2024-present sonvh1
+
+================================================================================
+PART 1 — SUSTAINABLE USE LICENSE (applies to Multi-Head Additions)
+================================================================================
+
+This software includes original work ("Multi-Head Additions") written by the
+copyright holder and distributed under the terms below.
+
+1. GRANT OF RIGHTS
+
+   Subject to the conditions in Section 2, the copyright holder grants you a
+   non-exclusive, worldwide, royalty-free license to use, copy, modify, and
+   distribute the Multi-Head Additions solely for your internal business
+   purposes or personal use.
+
+   You may also deploy the software for your own organization's internal use
+   or for providing services to your direct clients, provided such use complies
+   with the restrictions in Section 2.
+
+2. CONDITIONS
+
+   a. FREE USE TIER (SMALL & GROWING ORGANIZATIONS)
+      If your organization's Annual Recurring Revenue (ARR) directly
+      attributable to any product or service that incorporates or relies on the
+      Multi-Head Additions is less than USD $2,000,000 in the most recent
+      12-month period, you may use the Multi-Head Additions at no charge.
+
+   b. COMMERCIAL LICENSE REQUIRED
+      If your ARR from products or services using the Multi-Head Additions
+      reaches or exceeds USD $2,000,000, you must obtain a paid commercial
+      license within 90 days of crossing the threshold to continue using the
+      Multi-Head Additions in production.
+      Contact: nautilux2@gmail.com
+
+   c. RESTRICTED USES (MANAGED / HOSTED SERVICES)
+      You may not offer the Multi-Head Additions (or any software whose primary
+      functionality or value is substantially derived from the Multi-Head
+      Additions) as a hosted, managed, or SaaS service to third parties in a
+      way that competes with the licensor's own offerings, without a separate
+      written commercial agreement.
+
+      This restriction does not prohibit:
+        - Running the software internally for your own business operations.
+        - Providing consulting, customization, or support services related to
+          the software.
+        - Hosting the software solely for your direct paying clients on
+          infrastructure you control (as long as the Multi-Head features are
+          not the core paid offering being resold).
+
+   d. ATTRIBUTION
+      You must retain all copyright, license, and attribution notices in any
+      copy or substantial portion of the Multi-Head Additions.
+
+   e. COMPLIANCE & REPORTING
+      Upon reasonable written request (not more than once per year), you agree
+      to provide a good-faith statement confirming your ARR status and
+      compliance with this license.
+
+3. DEFINITIONS
+
+   "Multi-Head Additions" means the source code files added by the copyright
+   holder that are not part of the upstream Supabase Studio project, including
+   but not limited to: multi-head cluster management, license gating,
+   self-hosted project creation, failover management, and the smh CLI.
+
+   "Annual Recurring Revenue (ARR)" means the recurring revenue (subscription
+   or usage-based) recognized in the most recent 12-month period that is
+   directly generated from products or services incorporating the Multi-Head
+   Additions. Revenue from unrelated business lines is not counted.
+
+   "Substantially derived" refers to any product or service where the
+   Multi-Head Additions (or their core functionality) provide the majority of
+   the technical value or competitive advantage being offered to end users.
+
+4. DISCLAIMER
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM,
+   DAMAGES, OR OTHER LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
+
+================================================================================
+PART 2 — APACHE LICENSE 2.0 (applies to upstream Supabase Studio code)
+================================================================================
+
+Portions of this software are derived from Supabase Studio
+(https://github.com/supabase/supabase), Copyright 2024 Supabase, Inc.,
+and are licensed under the Apache License, Version 2.0.
+
+A copy of the Apache License 2.0 is reproduced below.
+
+--------------------------------------------------------------------------------
+
                                  Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/

@@ -17,7 +17,7 @@ import {
   waitForProjectHealth,
 } from '@/lib/api/self-hosted/orchestrator'
 import { provisionReplica } from '@/lib/api/self-hosted/clusterManager'
-import { requirePro } from '@/lib/api/self-hosted/licenseManager'
+import { requireTier } from '@/lib/api/self-hosted/licenseManager'
 
 export default (req: NextApiRequest, res: NextApiResponse) => apiWrapper(req, res, handler)
 
@@ -66,7 +66,7 @@ const handleCreate = async (req: NextApiRequest, res: NextApiResponse) => {
   }
 
   if (cluster_mode) {
-    const license = requirePro()
+    const license = requireTier('cluster')
     if (!license.ok) return res.status(402).json({ data: null, error: { message: license.message } })
   }
 
