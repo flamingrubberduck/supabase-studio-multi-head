@@ -63,7 +63,12 @@ function writeToDisk(orgs: StoredOrganization[]): void {
 }
 
 export function getStoredOrganizations(): StoredOrganization[] {
-  return [makeDefaultOrg(), ...readFromDisk()]
+  const persisted = readFromDisk()
+  // If the default org has been renamed it will be in the persisted list; use that version.
+  const persistedDefault = persisted.find((o) => o.slug === 'default-org-slug')
+  const defaultOrg = persistedDefault ?? makeDefaultOrg()
+  const others = persisted.filter((o) => o.slug !== 'default-org-slug')
+  return [defaultOrg, ...others]
 }
 
 export function getStoredOrganizationBySlug(slug: string): StoredOrganization | undefined {
@@ -90,6 +95,19 @@ export interface CreateOrganizationData {
   kind?: string
   size?: string
   tier?: string
+}
+
+export function updateStoredOrganization(
+  slug: string,
+  patch: Partial<Pick<StoredOrganization, 'name' | 'billing_email'>>
+): StoredOrganization | null {
+  const org = getStoredOrganizationBySlug(slug)
+  if (!org) return null
+  const updated = { ...org, ...patch }
+  // Write back — filter out any existing record for this slug (including default if persisted)
+  const existing = readFromDisk().filter((o) => o.slug !== slug)
+  writeToDisk([...existing, updated])
+  return updated
 }
 
 export function deleteStoredOrganization(slug: string): void {

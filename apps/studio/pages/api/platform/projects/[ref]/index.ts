@@ -3,7 +3,7 @@ import { NextApiRequest, NextApiResponse } from 'next'
 import apiWrapper from '@/lib/api/apiWrapper'
 import { teardownProjectStack } from '@/lib/api/self-hosted/orchestrator'
 import { dropReplicationSlot } from '@/lib/api/self-hosted/replicationManager'
-import { deleteStoredProject, getStoredProjectByRef, getStoredProjects } from '@/lib/api/self-hosted/projectsStore'
+import { deleteStoredProject, getStoredProjectByRef, getStoredProjects, updateProjectFields } from '@/lib/api/self-hosted/projectsStore'
 import { PROJECT_REST_URL } from '@/lib/constants/api'
 
 export default (req: NextApiRequest, res: NextApiResponse) => apiWrapper(req, res, handler)
@@ -14,10 +14,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   switch (method) {
     case 'GET':
       return handleGet(req, res)
+    case 'PATCH':
+      return handlePatch(req, res)
     case 'DELETE':
       return handleDelete(req, res)
     default:
-      res.setHeader('Allow', ['GET', 'DELETE'])
+      res.setHeader('Allow', ['GET', 'PATCH', 'DELETE'])
       res.status(405).json({ data: null, error: { message: `Method ${method} Not Allowed` } })
   }
 }
@@ -48,6 +50,23 @@ const handleGet = async (req: NextApiRequest, res: NextApiResponse) => {
     connectionString: '',
     restUrl: PROJECT_REST_URL,
   })
+}
+
+const handlePatch = async (req: NextApiRequest, res: NextApiResponse) => {
+  const ref = req.query.ref as string
+  const { name } = req.body
+
+  if (!name?.trim()) {
+    return res.status(400).json({ data: null, error: { message: 'Project name cannot be empty.' } })
+  }
+
+  const project = getStoredProjectByRef(ref)
+  if (!project) {
+    return res.status(404).json({ data: null, error: { message: 'Project not found' } })
+  }
+
+  updateProjectFields(ref, { name: String(name).trim() })
+  return res.status(200).json({ ...project, name: String(name).trim() })
 }
 
 const handleDelete = async (req: NextApiRequest, res: NextApiResponse) => {

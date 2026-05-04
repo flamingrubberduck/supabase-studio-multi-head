@@ -1,10 +1,11 @@
 import { Lock } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from 'ui'
 
 import { LastSignInWrapper } from '@/components/interfaces/SignIn/LastSignInWrapper'
+import { SelfHostedSignInForm } from '@/components/interfaces/SignIn/SelfHostedSignInForm'
 import { SignInForm } from '@/components/interfaces/SignIn/SignInForm'
 import { SignInWithCustom } from '@/components/interfaces/SignIn/SignInWithCustom'
 import { SignInWithGitHub } from '@/components/interfaces/SignIn/SignInWithGitHub'
@@ -17,6 +18,7 @@ import type { NextPageWithLayout } from '@/types'
 
 const SignInPage: NextPageWithLayout = () => {
   const router = useRouter()
+  const [selfHostedAuthRequired, setSelfHostedAuthRequired] = useState<boolean | null>(null)
 
   const {
     dashboardAuthSignInWithGithub: signInWithGithubEnabled,
@@ -39,10 +41,22 @@ const SignInPage: NextPageWithLayout = () => {
 
   useEffect(() => {
     if (!IS_PLATFORM) {
-      // on selfhosted instance just redirect to projects page
-      router.replace('/projects')
+      fetch('/api/self-hosted/session')
+        .then((r) => r.json())
+        .then(({ required }) => {
+          if (!required) {
+            router.replace('/projects')
+          } else {
+            setSelfHostedAuthRequired(true)
+          }
+        })
+        .catch(() => router.replace('/projects'))
     }
   }, [router])
+
+  if (!IS_PLATFORM && selfHostedAuthRequired) {
+    return <SelfHostedSignInForm />
+  }
 
   return (
     <>
