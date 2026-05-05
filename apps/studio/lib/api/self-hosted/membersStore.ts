@@ -18,11 +18,23 @@ export interface StoredMember {
   username: string
   primary_email: string
   role_ids: number[]
+  /** Set only when member has project-scoped access; null/undefined means org-scoped. */
+  project_refs?: string[] | null
   created_at: string
   mfa_enabled: boolean
   is_sso_user: boolean
   metadata: Record<string, unknown>
   password_hash?: string
+}
+
+/** Returns the base role ID (1-4) from either an org-scoped or project-scoped role ID. */
+export function getBaseRoleId(roleId: number): number {
+  return roleId >= 1000 ? roleId % 10 : roleId
+}
+
+/** Computes the unique project-scoped role ID for a given member+role combination. */
+export function projectScopedRoleId(memberId: number, baseRoleId: number): number {
+  return 1000 + memberId * 10 + baseRoleId
 }
 
 export function hashPassword(password: string): string {
@@ -128,15 +140,51 @@ export function addOrgMember(
 export function assignOrgMemberRole(
   slug: string,
   gotrue_id: string,
-  role_id: number
+  role_id: number,
+  project_refs?: string[]
 ): StoredMember | null {
   const store = read()
   const org = orgData(store, slug)
   const idx = org.members.findIndex((m) => m.gotrue_id === gotrue_id)
   if (idx === -1) return null
 
-  // Replace all roles with the new one (org-scoped, single role)
-  org.members[idx] = { ...org.members[idx], role_ids: [role_id] }
+  const member = org.members[idx]
+  if (project_refs && project_refs.length > 0) {
+    // Project-scoped: use a unique role ID = 1000 + member.id * 10 + base_role_id
+    const psRoleId = projectScopedRoleId(member.id, role_id)
+    org.members[idx] = { ...member, role_ids: [psRoleId], project_refs }
+  } else {
+    // Org-scoped: clear any project scoping
+    org.members[idx] = { ...member, role_ids: [role_id], project_refs: null }
+  }
+  store[slug] = org
+  write(store)
+  return org.members[idx]
+}
+
+/**
+ * Updates the project list for an existing project-scoped role.
+ * If project_refs is empty, converts back to org-scoped.
+ */
+export function updateOrgMemberRoleProjectRefs(
+  slug: string,
+  gotrue_id: string,
+  project_role_id: number,
+  project_refs: string[]
+): StoredMember | null {
+  const store = read()
+  const org = orgData(store, slug)
+  const idx = org.members.findIndex((m) => m.gotrue_id === gotrue_id)
+  if (idx === -1) return null
+
+  const member = org.members[idx]
+  if (project_refs.length === 0) {
+    // Convert back to org-scoped using the base role ID
+    const baseRoleId = getBaseRoleId(project_role_id)
+    org.members[idx] = { ...member, role_ids: [baseRoleId], project_refs: null }
+  } else {
+    org.members[idx] = { ...member, project_refs }
+  }
   store[slug] = org
   write(store)
   return org.members[idx]

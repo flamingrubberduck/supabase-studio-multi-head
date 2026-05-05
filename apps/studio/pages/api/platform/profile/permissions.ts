@@ -35,7 +35,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!found) return res.status(404).json({ error: "User's profile not found" })
 
   const { member, org_slug } = found
-  const role_id = member.role_ids[0] ?? 3
+  // Project-scoped members have role IDs >= 1000 (encoded as 1000 + member.id*10 + base_role_id)
+  const rawRoleId = member.role_ids[0] ?? 3
+  const role_id = rawRoleId >= 1000 ? rawRoleId % 10 : rawRoleId
 
   // Resolve the org slug to get the actual stored slug (in case it differs)
   const orgs = getStoredOrganizations()

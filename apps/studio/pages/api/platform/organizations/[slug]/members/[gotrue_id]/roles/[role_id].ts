@@ -1,7 +1,10 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 
 import apiWrapper from '@/lib/api/apiWrapper'
-import { assignOrgMemberRole, unassignOrgMemberRole } from '@/lib/api/self-hosted/membersStore'
+import {
+  unassignOrgMemberRole,
+  updateOrgMemberRoleProjectRefs,
+} from '@/lib/api/self-hosted/membersStore'
 
 export default (req: NextApiRequest, res: NextApiResponse) => apiWrapper(req, res, handler)
 
@@ -20,8 +23,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   if (req.method === 'PUT') {
-    // Project-scoped role updates — in self-hosted we treat this as a plain assign
-    const updated = assignOrgMemberRole(slug, gotrue_id, roleId)
+    const { role_scoped_projects } = req.body as { role_scoped_projects?: string[] }
+    const updated = updateOrgMemberRoleProjectRefs(
+      slug,
+      gotrue_id,
+      roleId,
+      role_scoped_projects ?? []
+    )
     if (!updated) return res.status(404).json({ data: null, error: { message: 'Member not found' } })
     return res.status(200).json(updated)
   }

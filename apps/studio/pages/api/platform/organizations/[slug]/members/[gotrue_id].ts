@@ -5,6 +5,7 @@ import { assignOrgMemberRole, deleteOrgMember } from '@/lib/api/self-hosted/memb
 import { STUDIO_AUTH_GOTRUE } from '@/lib/constants'
 import { gotrueAdminDeleteUser } from '@/lib/api/self-hosted/studioGoTrue'
 
+
 export default (req: NextApiRequest, res: NextApiResponse) => apiWrapper(req, res, handler)
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -25,11 +26,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   if (req.method === 'PATCH') {
-    const { role_id } = req.body as { role_id: number }
+    const { role_id, role_scoped_projects } = req.body as {
+      role_id: number
+      role_scoped_projects?: string[]
+    }
     if (typeof role_id !== 'number') {
       return res.status(400).json({ data: null, error: { message: 'role_id is required' } })
     }
-    const updated = assignOrgMemberRole(slug, gotrue_id, role_id)
+    const updated = assignOrgMemberRole(slug, gotrue_id, role_id, role_scoped_projects)
     if (!updated) return res.status(404).json({ data: null, error: { message: 'Member not found' } })
     return res.status(200).json(updated)
   }

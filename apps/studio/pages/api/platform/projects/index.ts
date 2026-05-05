@@ -4,6 +4,7 @@ import { NextApiRequest, NextApiResponse } from 'next'
 import apiWrapper from '@/lib/api/apiWrapper'
 import { STUDIO_AUTH_GOTRUE } from '@/lib/constants'
 import { getGoTrueAuthMember } from '@/lib/api/self-hosted/studioGoTrue'
+import type { StoredMember } from '@/lib/api/self-hosted/membersStore'
 import {
   createStoredProject,
   createEmbeddedStoredProject,
@@ -33,16 +34,17 @@ export default (req: NextApiRequest, res: NextApiResponse) => apiWrapper(req, re
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { method } = req
 
+  let authMember: StoredMember | null = null
   if (STUDIO_AUTH_GOTRUE) {
-    const member = await getGoTrueAuthMember(req)
-    if (!member) {
+    authMember = await getGoTrueAuthMember(req)
+    if (!authMember) {
       return res.status(401).json({ data: null, error: { message: 'Unauthorized' } })
     }
   }
 
   switch (method) {
     case 'GET':
-      return handleGetAll(req, res)
+      return handleGetAll(req, res, authMember)
     case 'POST':
       return handleCreate(req, res)
     default:
@@ -51,11 +53,20 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 }
 
-const handleGetAll = async (req: NextApiRequest, res: NextApiResponse) => {
+const handleGetAll = async (
+  req: NextApiRequest,
+  res: NextApiResponse,
+  authMember: StoredMember | null = null
+) => {
   const { limit = '100', offset = '0', search } = req.query
 
   // Standbys and replicas are internal implementation details — hide them from the project list
   let projects = getStoredProjects().filter((p) => p.role !== 'standby' && p.role !== 'replica')
+
+  // Project-scoped members only see their allowed projects
+  if (authMember?.project_refs && authMember.project_refs.length > 0) {
+    projects = projects.filter((p) => authMember.project_refs!.includes(p.ref))
+  }
 
   if (search && typeof search === 'string' && search.length > 0) {
     const q = search.toLowerCase()
