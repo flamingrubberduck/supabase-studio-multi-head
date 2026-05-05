@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 
+import { constructHeaders } from '@/data/fetchers'
 import { IS_PLATFORM } from '@/lib/constants'
 
 export interface CurrentMemberInfo {
@@ -13,7 +14,8 @@ export interface CurrentMemberInfo {
 }
 
 async function fetchCurrentMember(): Promise<CurrentMemberInfo | null> {
-  const res = await fetch('/api/self-hosted/me')
+  const headers = await constructHeaders()
+  const res = await fetch('/api/self-hosted/me', { headers })
   if (!res.ok) return null
   return res.json()
 }
