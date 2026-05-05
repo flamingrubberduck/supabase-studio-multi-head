@@ -27,13 +27,12 @@ const SetupPage: NextPageWithLayout = () => {
 
   // Redirect to sign-in if admin already exists (e.g. user navigated here directly)
   useEffect(() => {
-    fetch('/api/self-hosted/bootstrap', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
-    }).then((r) => {
-      if (r.status === 409) router.replace('/sign-in')
-    })
+    fetch('/api/self-hosted/bootstrap')
+      .then((r) => r.json())
+      .then(({ bootstrapped }) => {
+        if (bootstrapped) router.replace('/sign-in')
+      })
+      .catch(() => {})
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

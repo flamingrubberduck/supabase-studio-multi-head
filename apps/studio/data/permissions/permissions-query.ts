@@ -3,7 +3,7 @@ import { useIsLoggedIn } from 'common'
 
 import { permissionKeys } from './keys'
 import { get, handleError } from '@/data/fetchers'
-import { IS_PLATFORM } from '@/lib/constants'
+import { IS_PLATFORM, STUDIO_AUTH_GOTRUE } from '@/lib/constants'
 import type { Permission, ResponseError, UseCustomQueryOptions } from '@/types'
 
 export type PermissionsResponse = Permission[]
@@ -40,7 +40,7 @@ export const usePermissionsQuery = <TData = PermissionsData>({
     queryKey: permissionKeys.list(),
     queryFn: ({ signal }) => getPermissions(signal),
     ...options,
-    enabled: IS_PLATFORM && enabled && isLoggedIn,
+    enabled: (IS_PLATFORM || STUDIO_AUTH_GOTRUE) && enabled && isLoggedIn,
     staleTime: 5 * 60 * 1000,
   })
 }

@@ -16,8 +16,20 @@ import { getStoredOrganizations } from '@/lib/api/self-hosted/organizationsStore
 import { gotrueAdminCreateUser, gotrueAdminUpdateUser } from '@/lib/api/self-hosted/studioGoTrue'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method === 'GET') {
+    // Lightweight status check — used by sign-in and setup pages to decide which flow to show.
+    if (!STUDIO_AUTH_GOTRUE) {
+      return res.status(400).json({ error: 'Not in GoTrue auth mode' })
+    }
+    const orgs = getStoredOrganizations()
+    const defaultOrg = orgs[0]
+    if (!defaultOrg) return res.status(200).json({ bootstrapped: false })
+    const existing = getOrgMembers(defaultOrg.slug)
+    return res.status(200).json({ bootstrapped: existing.length > 0 })
+  }
+
   if (req.method !== 'POST') {
-    res.setHeader('Allow', ['POST'])
+    res.setHeader('Allow', ['GET', 'POST'])
     return res.status(405).json({ error: 'Method not allowed' })
   }
 

@@ -5,7 +5,7 @@ import { useMemo } from 'react'
 import { useSelectedOrganizationQuery } from './useSelectedOrganization'
 import { useSelectedProjectQuery } from './useSelectedProject'
 import { usePermissionsQuery } from '@/data/permissions/permissions-query'
-import { IS_PLATFORM } from '@/lib/constants'
+import { IS_PLATFORM, STUDIO_AUTH_GOTRUE } from '@/lib/constants'
 import type { Permission } from '@/types'
 
 const toRegexpString = (actionOrResource: string) =>
@@ -157,8 +157,11 @@ export function useAsyncCheckPermissions(
     isSuccess: isPermissionsSuccess,
   } = useGetProjectPermissions(permissions, organizationSlug, projectRef, isLoggedIn)
 
+  // Legacy self-hosted (no GoTrue): skip permission enforcement entirely.
+  const skipPermissions = !IS_PLATFORM && !STUDIO_AUTH_GOTRUE
+
   const can = useMemo(() => {
-    if (!IS_PLATFORM) return true
+    if (skipPermissions) return true
     if (!isLoggedIn) return false
     if (!isPermissionsSuccess || !allPermissions) return false
 
@@ -171,6 +174,7 @@ export function useAsyncCheckPermissions(
       _projectRef
     )
   }, [
+    skipPermissions,
     isLoggedIn,
     isPermissionsSuccess,
     allPermissions,
@@ -182,9 +186,9 @@ export function useAsyncCheckPermissions(
   ])
 
   // Derive loading/success consistently from the same branches
-  const isLoading = !IS_PLATFORM ? false : !isLoggedIn ? true : isPermissionsLoading
+  const isLoading = skipPermissions ? false : !isLoggedIn ? true : isPermissionsLoading
 
-  const isSuccess = !IS_PLATFORM ? true : !isLoggedIn ? false : isPermissionsSuccess
+  const isSuccess = skipPermissions ? true : !isLoggedIn ? false : isPermissionsSuccess
 
   return { isLoading, isSuccess, can }
 }

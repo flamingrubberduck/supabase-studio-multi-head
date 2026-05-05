@@ -49,20 +49,14 @@ const SignInPage: NextPageWithLayout = () => {
   useEffect(() => {
     if (STUDIO_AUTH_GOTRUE) {
       // Redirect to setup if no admin has been created yet
-      fetch('/api/self-hosted/bootstrap', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
-        .then((r) => {
-          if (r.status === 400 && r.headers.get('content-type')?.includes('json')) {
-            return r.json().then((b) => {
-              if (b.error === 'email and password are required') {
-                // Bootstrap endpoint reachable and no admin exists yet — go to setup
-                router.replace('/setup')
-              }
-            })
-          }
-          // 409 = already bootstrapped, stay on sign-in
+      fetch('/api/self-hosted/bootstrap')
+        .then((r) => r.json())
+        .then(({ bootstrapped }) => {
+          if (!bootstrapped) router.replace('/setup')
+          // bootstrapped=true → stay on sign-in (correct page)
         })
         .catch(() => {
-          // ignore, stay on sign-in
+          // ignore network errors, stay on sign-in
         })
       return
     }
