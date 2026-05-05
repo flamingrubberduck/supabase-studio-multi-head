@@ -108,27 +108,8 @@ async function handlePost(req: NextApiRequest, res: NextApiResponse) {
     return res.status(409).json({ error: { message: 'Profile already exists' } })
   }
 
-  // Default org for auto-created profiles
-  const orgs = getStoredOrganizations()
-  const defaultOrg = orgs[0]
-  if (!defaultOrg) {
-    return res.status(500).json({ error: { message: 'No organization found' } })
-  }
-
-  // Determine role: first user in org → Owner (1), otherwise Developer (3)
-  const existingMembers = getOrgMembers(defaultOrg.slug)
-  const role_id = existingMembers.length === 0 ? 1 : 3
-
-  const member = addOrgMember(defaultOrg.slug, {
-    primary_email: gotrueUser.email,
-    role_id,
-    gotrue_id_override: gotrueUser.sub,
-  })
-
-  return res.status(200).json({
-    id: member.id,
-    primary_email: member.primary_email,
-    username: member.username,
-    gotrue_id: member.gotrue_id,
-  })
+  // Do NOT auto-create members for unknown GoTrue users — the admin must invite them
+  // explicitly via the organization members UI. Only the very first user (bootstrap) is
+  // auto-enrolled, and that happens through /api/self-hosted/bootstrap, not here.
+  return res.status(404).json({ error: { message: "User's profile not found" } })
 }

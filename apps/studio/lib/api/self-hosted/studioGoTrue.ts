@@ -98,3 +98,20 @@ export async function gotrueVerifyJwt(
   const data = await res.json()
   return { sub: data.id, email: data.email }
 }
+
+/**
+ * Extract + verify the GoTrue Bearer token from a Next.js API request.
+ * Returns the verified StoredMember, or null if the token is missing/invalid/not a member.
+ * Call this at the top of any API route that should require Studio login.
+ */
+export async function getGoTrueAuthMember(
+  req: import('next').NextApiRequest
+): Promise<import('./membersStore').StoredMember | null> {
+  const { findMemberByGotrueId } = await import('./membersStore')
+  const token = req.headers.authorization?.replace(/bearer /i, '').trim()
+  if (!token) return null
+  const gotrueUser = await gotrueVerifyJwt(token)
+  if (!gotrueUser) return null
+  const found = findMemberByGotrueId(gotrueUser.sub)
+  return found?.member ?? null
+}

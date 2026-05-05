@@ -1,7 +1,7 @@
 import { Lock } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button, Input_Shadcn_, Label_Shadcn_ } from 'ui'
 
 import { SignInWithGitHub } from '@/components/interfaces/SignIn/SignInWithGitHub'
@@ -24,6 +24,18 @@ const SetupPage: NextPageWithLayout = () => {
     if (typeof window !== 'undefined') router.replace('/projects')
     return null
   }
+
+  // Redirect to sign-in if admin already exists (e.g. user navigated here directly)
+  useEffect(() => {
+    fetch('/api/self-hosted/bootstrap', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    }).then((r) => {
+      if (r.status === 409) router.replace('/sign-in')
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

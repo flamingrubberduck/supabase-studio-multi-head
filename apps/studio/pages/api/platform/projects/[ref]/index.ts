@@ -1,6 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 
 import apiWrapper from '@/lib/api/apiWrapper'
+import { STUDIO_AUTH_GOTRUE } from '@/lib/constants'
+import { getGoTrueAuthMember } from '@/lib/api/self-hosted/studioGoTrue'
 import { teardownProjectStack } from '@/lib/api/self-hosted/orchestrator'
 import { dropEmbeddedDatabase } from '@/lib/api/self-hosted/embeddedOrchestrator'
 import { dropReplicationSlot } from '@/lib/api/self-hosted/replicationManager'
@@ -11,6 +13,13 @@ export default (req: NextApiRequest, res: NextApiResponse) => apiWrapper(req, re
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { method } = req
+
+  if (STUDIO_AUTH_GOTRUE) {
+    const member = await getGoTrueAuthMember(req)
+    if (!member) {
+      return res.status(401).json({ data: null, error: { message: 'Unauthorized' } })
+    }
+  }
 
   switch (method) {
     case 'GET':

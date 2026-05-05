@@ -1,4 +1,4 @@
-import { FlaskConical, Settings } from 'lucide-react'
+import { FlaskConical, LogOut, Settings } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
@@ -21,6 +21,8 @@ import {
 import { ButtonTooltip } from '../ui/ButtonTooltip'
 import { useFeaturePreviewModal } from './App/FeaturePreview/FeaturePreviewContext'
 import { ProfileImage } from '@/components/ui/ProfileImage'
+import { useSignOut } from '@/lib/auth'
+import { STUDIO_AUTH_GOTRUE } from '@/lib/constants'
 import { useAppStateSnapshot } from '@/state/app-state'
 
 export const LocalDropdown = ({
@@ -34,6 +36,7 @@ export const LocalDropdown = ({
   const { theme, setTheme } = useTheme()
   const appStateSnapshot = useAppStateSnapshot()
   const { toggleFeaturePreviewModal } = useFeaturePreviewModal()
+  const signOut = useSignOut()
 
   return (
     <DropdownMenu>
@@ -68,6 +71,21 @@ export const LocalDropdown = ({
           <FlaskConical size={14} strokeWidth={1.5} className="text-foreground-lighter" />
           Feature previews
         </DropdownMenuItem>
+        {STUDIO_AUTH_GOTRUE && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="flex gap-2 cursor-pointer"
+              onClick={async () => {
+                await signOut()
+                router.push('/sign-in')
+              }}
+            >
+              <LogOut size={14} strokeWidth={1.5} className="text-foreground-lighter" />
+              Sign out
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuLabel>Theme</DropdownMenuLabel>
