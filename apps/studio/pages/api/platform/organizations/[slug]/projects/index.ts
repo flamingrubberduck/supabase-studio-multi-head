@@ -2,6 +2,8 @@ import { NextApiRequest, NextApiResponse } from 'next'
 
 import apiWrapper from '@/lib/api/apiWrapper'
 import { getStoredProjects } from '@/lib/api/self-hosted/projectsStore'
+import { STUDIO_AUTH_GOTRUE } from '@/lib/constants'
+import { getGoTrueAuthMember } from '@/lib/api/self-hosted/studioGoTrue'
 
 export default (req: NextApiRequest, res: NextApiResponse) => apiWrapper(req, res, handler)
 
@@ -28,6 +30,14 @@ const handleGetAll = async (req: NextApiRequest, res: NextApiResponse) => {
   let projects = allProjects
     .filter((p) => !slug || p.organization_slug === slug)
     .filter((p) => showStandby || (p.role !== 'standby' && p.role !== 'replica'))
+
+  // In GoTrue mode, project-scoped members only see their allowed projects
+  if (STUDIO_AUTH_GOTRUE) {
+    const authMember = await getGoTrueAuthMember(req)
+    if (authMember?.project_refs && authMember.project_refs.length > 0) {
+      projects = projects.filter((p) => authMember.project_refs!.includes(p.ref))
+    }
+  }
 
   if (search && typeof search === 'string' && search.length > 0) {
     const q = search.toLowerCase()

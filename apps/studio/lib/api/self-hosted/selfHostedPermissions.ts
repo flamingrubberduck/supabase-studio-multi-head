@@ -54,14 +54,15 @@ function perm(
   actions: string[],
   resources: string[],
   organization_slug: string,
-  restrictive = false
+  restrictive = false,
+  condition: object | null = null
 ): Permission {
   return {
     actions: actions as any,
     resources,
     organization_slug,
     project_refs: [],
-    condition: null as any,
+    condition: condition as any,
     restrictive,
   }
 }
@@ -111,6 +112,14 @@ export function permissionsForRole(role_id: number, organization_slug: string): 
         // …except team/org management
         perm([A.CREATE, A.UPDATE, A.DELETE], ['user_invites'], organization_slug, true),
         perm([A.UPDATE, A.DELETE], ['organizations'], organization_slug, true),
+        // …and cannot assign/remove Owner (1) or Administrator (2) roles
+        perm(
+          [A.CREATE, A.UPDATE, A.DELETE],
+          ['auth.subject_roles'],
+          organization_slug,
+          true,
+          { in: [{ var: 'resource.role_id' }, [1, 2]] }
+        ),
       ]
     }
 

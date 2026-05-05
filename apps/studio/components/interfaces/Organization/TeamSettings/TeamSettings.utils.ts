@@ -2,7 +2,7 @@ import { PermissionAction } from '@supabase/shared-types/out/constants'
 
 import type { OrganizationMember } from '@/data/organizations/organization-members-query'
 import { doPermissionsCheck, useGetPermissions } from '@/hooks/misc/useCheckPermissions'
-import { IS_PLATFORM } from '@/lib/constants'
+import { IS_PLATFORM, STUDIO_AUTH_GOTRUE } from '@/lib/constants'
 import type { Permission, Role } from '@/types'
 
 export const useGetRolesManagementPermissions = (
@@ -16,8 +16,8 @@ export const useGetRolesManagementPermissions = (
     permissions !== undefined && orgSlug !== undefined
   )
 
-  // Self-hosted: no cloud permission system — all roles are manageable
-  if (!IS_PLATFORM) {
+  // Legacy self-hosted without GoTrue: no permission system, all roles manageable
+  if (!IS_PLATFORM && !STUDIO_AUTH_GOTRUE) {
     const ids = (roles ?? []).map((r) => r.id as Number)
     return { rolesAddable: ids, rolesRemovable: ids }
   }
