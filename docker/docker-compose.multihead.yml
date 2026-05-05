@@ -45,3 +45,8 @@ services:
       MULTI_HEAD_LICENSE_SECRET: ${MULTI_HEAD_LICENSE_SECRET:-}
       MULTI_HEAD_LICENSE_KEY: ${MULTI_HEAD_LICENSE_KEY:-}
       MULTI_HEAD_LICENSE_SERVER_URL: ${MULTI_HEAD_LICENSE_SERVER_URL:-}
+      # GoTrue-backed Studio auth
+      # Server-side URL for GoTrue admin API calls (internal Docker hostname, not baked at build time)
+      STUDIO_GOTRUE_URL: http://auth:9999
+      # service_role key — allows Studio to create/delete Studio users via GoTrue admin API
+      STUDIO_GOTRUE_SERVICE_KEY: ${SERVICE_ROLE_KEY}

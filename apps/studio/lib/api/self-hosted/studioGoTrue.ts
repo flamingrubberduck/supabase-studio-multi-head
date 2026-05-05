@@ -7,7 +7,13 @@
  *   STUDIO_GOTRUE_SERVICE_KEY — service_role JWT for the default project
  */
 
-const GOTRUE_URL = process.env.NEXT_PUBLIC_GOTRUE_URL || 'http://localhost:8000/auth/v1'
+// STUDIO_GOTRUE_URL is a runtime-only (non-NEXT_PUBLIC) var so it isn't baked at build
+// time and can be set to the internal Docker hostname (e.g. http://auth:9999).
+// Falls back to NEXT_PUBLIC_GOTRUE_URL for local dev where both are the same host.
+const GOTRUE_URL =
+  process.env.STUDIO_GOTRUE_URL ||
+  process.env.NEXT_PUBLIC_GOTRUE_URL ||
+  'http://localhost:8000/auth/v1'
 const SERVICE_KEY = process.env.STUDIO_GOTRUE_SERVICE_KEY || ''
 
 function adminHeaders() {
