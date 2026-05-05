@@ -392,7 +392,8 @@ services:
       #      - ::1
       #    deny: []
 
-  ## Protected Dashboard - catch all remaining routes
+  ## Dashboard - catch all remaining routes
+  ## Auth is handled by the Studio app itself (GoTrue session)
   - name: dashboard
     _comment: 'Studio: /* -> http://studio:3000/*'
     url: http://studio:3000/
@@ -403,6 +404,3 @@ services:
           - /
     plugins:
       - name: cors
-      - name: basic-auth
-        config:
-          hide_credentials: true

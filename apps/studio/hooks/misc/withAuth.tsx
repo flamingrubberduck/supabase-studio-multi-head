@@ -7,7 +7,7 @@ import { SessionTimeoutModal } from '@/components/interfaces/SignIn/SessionTimeo
 import { usePermissionsQuery } from '@/data/permissions/permissions-query'
 import { useAuthenticatorAssuranceLevelQuery } from '@/data/profile/mfa-authenticator-assurance-level-query'
 import { useSignOut } from '@/lib/auth'
-import { BASE_PATH, IS_PLATFORM } from '@/lib/constants'
+import { BASE_PATH, IS_PLATFORM, STUDIO_AUTH_GOTRUE } from '@/lib/constants'
 import { isNextPageWithLayout, type NextPageWithLayout } from '@/types'
 
 const MAX_TIMEOUT = 10000 // 10 seconds
@@ -26,8 +26,8 @@ export function withAuth<T>(
     useHighestAAL: boolean
   } = { useHighestAAL: true }
 ) {
-  // ignore auth in self-hosted
-  if (!IS_PLATFORM) {
+  // In legacy self-hosted mode (no GoTrue), skip auth entirely — the proxy cookie guard handles it
+  if (!IS_PLATFORM && !STUDIO_AUTH_GOTRUE) {
     return WrappedComponent
   }
 
@@ -47,7 +47,7 @@ export function withAuth<T>(
     } = useAuthenticatorAssuranceLevelQuery()
 
     useEffect(() => {
-      if (isErrorAAL) {
+      if (isErrorAAL && IS_PLATFORM) {
         toast.error(
           `Failed to fetch authenticator assurance level: ${errorAAL?.message}. Try refreshing your browser, or reach out to us via a support ticket if the issue persists`
         )
