@@ -29,7 +29,7 @@ services:
           "CMD",
           "node",
           "-e",
-          "fetch('http://localhost:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})"
+          "fetch('http://localhost:3000/api/self-hosted/session').then((r) => {if (r.status !== 200) throw new Error(r.status)})"
         ]
       timeout: 10s
       interval: 5s
@@ -66,6 +66,7 @@ services:
       SUPABASE_URL: http://kong:8000
       SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
       SUPABASE_ANON_KEY: ${ANON_KEY}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
       SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
       AUTH_JWT_SECRET: ${JWT_SECRET}
 
@@ -101,6 +102,9 @@ services:
       MULTI_HEAD_LICENSE_SECRET: ${MULTI_HEAD_LICENSE_SECRET:-}
       MULTI_HEAD_LICENSE_KEY: ${MULTI_HEAD_LICENSE_KEY:-}
       MULTI_HEAD_LICENSE_SERVER_URL: ${MULTI_HEAD_LICENSE_SERVER_URL:-}
+      # GoTrue-backed Studio auth
+      STUDIO_GOTRUE_URL: http://auth:9999
+      STUDIO_GOTRUE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
 
   kong:
     container_name: supabase-kong

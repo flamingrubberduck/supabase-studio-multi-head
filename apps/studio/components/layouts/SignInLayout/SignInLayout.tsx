@@ -8,7 +8,7 @@ import { tweets } from 'shared-data'
 
 import { DocsButton } from '@/components/ui/DocsButton'
 import { useIsFeatureEnabled } from '@/hooks/misc/useIsFeatureEnabled'
-import { BASE_PATH, DOCS_URL } from '@/lib/constants'
+import { BASE_PATH, DOCS_URL, IS_PLATFORM } from '@/lib/constants'
 import { auth, buildPathWithParams, getReturnToPath } from '@/lib/gotrue'
 
 type SignInLayoutProps = {
@@ -171,34 +171,66 @@ const SignInLayout = ({
             )}
           </main>
 
-          <aside className="flex-col items-center justify-center flex-1 flex-shrink hidden basis-1/4 xl:flex">
-            {quote !== null && showTestimonial && (
-              <div className="relative flex flex-col gap-6">
-                <div className="absolute select-none -top-12 -left-11">
-                  <span className="text-[160px] leading-none text-foreground-muted/30">{'“'}</span>
-                </div>
-
-                <blockquote className="z-10 max-w-lg text-3xl">{quote.text}</blockquote>
-
-                <a
-                  href={quote.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-4"
+          <aside className=”flex-col items-center justify-center flex-1 flex-shrink hidden basis-1/4 xl:flex”>
+            {!IS_PLATFORM ? (
+              <div className=”flex flex-col items-center gap-6 text-center”>
+                <svg
+                  viewBox=”0 0 24 24”
+                  className=”w-16 h-16 text-foreground-light”
+                  fill=”currentColor”
+                  aria-hidden=”true”
                 >
-                  <img
-                    src={`https://supabase.com${quote.img_url}`}
-                    alt={quote.handle}
-                    className="w-12 h-12 rounded-full"
-                  />
-
-                  <div className="flex flex-col">
-                    <cite className="not-italic font-medium text-foreground-light whitespace-nowrap">
-                      @{quote.handle}
-                    </cite>
-                  </div>
+                  <path d=”M12 0C5.37 0 0 5.373 0 12c0 5.303 3.438 9.8 8.205 11.387.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222 0 1.606-.015 2.896-.015 3.286 0 .322.216.694.825.576C20.565 21.795 24 17.298 24 12c0-6.627-5.373-12-12-12z” />
+                </svg>
+                <div className=”flex flex-col gap-2”>
+                  <h3 className=”text-xl font-medium text-foreground”>Supabase Studio Multi-Head</h3>
+                  <p className=”text-sm text-foreground-light max-w-xs”>
+                    Self-hosted, multi-org Supabase Dashboard. Manage multiple projects from a single
+                    interface.
+                  </p>
+                </div>
+                <a
+                  href=”https://github.com/flamingrubberduck/supabase-studio-multi-head”
+                  target=”_blank”
+                  rel=”noopener noreferrer”
+                  className=”flex items-center gap-2 px-4 py-2 rounded-md border border-default text-sm text-foreground-light hover:text-foreground hover:border-foreground-muted transition-colors”
+                >
+                  <svg viewBox=”0 0 24 24” className=”w-4 h-4” fill=”currentColor” aria-hidden=”true”>
+                    <path d=”M12 0C5.37 0 0 5.373 0 12c0 5.303 3.438 9.8 8.205 11.387.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222 0 1.606-.015 2.896-.015 3.286 0 .322.216.694.825.576C20.565 21.795 24 17.298 24 12c0-6.627-5.373-12-12-12z” />
+                  </svg>
+                  View on GitHub
                 </a>
               </div>
+            ) : (
+              quote !== null &&
+              showTestimonial && (
+                <div className=”relative flex flex-col gap-6”>
+                  <div className=”absolute select-none -top-12 -left-11”>
+                    <span className=”text-[160px] leading-none text-foreground-muted/30”>{'”'}</span>
+                  </div>
+
+                  <blockquote className=”z-10 max-w-lg text-3xl”>{quote.text}</blockquote>
+
+                  <a
+                    href={quote.url}
+                    target=”_blank”
+                    rel=”noopener noreferrer”
+                    className=”flex items-center gap-4”
+                  >
+                    <img
+                      src={`https://supabase.com${quote.img_url}`}
+                      alt={quote.handle}
+                      className=”w-12 h-12 rounded-full”
+                    />
+
+                    <div className=”flex flex-col”>
+                      <cite className=”not-italic font-medium text-foreground-light whitespace-nowrap”>
+                        @{quote.handle}
+                      </cite>
+                    </div>
+                  </a>
+                </div>
+              )
             )}
           </aside>
         </div>

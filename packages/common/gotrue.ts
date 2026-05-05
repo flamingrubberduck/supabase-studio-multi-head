@@ -185,6 +185,10 @@ export const gotrueClient = new AuthClient({
   detectSessionInUrl: shouldDetectSessionInUrl,
   debug: debug ? (persistedDebug ? logIndexedDB : true) : false,
   lock: navigatorLockEnabled ? debuggableNavigatorLock : undefined,
+  // Kong requires apikey on every request; set it when the anon key is available (self-hosted)
+  ...(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    ? { headers: { apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY } }
+    : {}),
   ...('localStorage' in globalThis
     ? { storage: globalThis.localStorage, userStorage: globalThis.localStorage }
     : null),
