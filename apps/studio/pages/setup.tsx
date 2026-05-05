@@ -7,6 +7,7 @@ import { Button, Input_Shadcn_, Label_Shadcn_ } from 'ui'
 import { SignInWithGitHub } from '@/components/interfaces/SignIn/SignInWithGitHub'
 import { AuthenticationLayout } from '@/components/layouts/AuthenticationLayout'
 import SignInLayout from '@/components/layouts/SignInLayout/SignInLayout'
+import { useGoTrueProviders } from '@/hooks/misc/useGoTrueProviders'
 import { STUDIO_AUTH_GOTRUE } from '@/lib/constants'
 import type { NextPageWithLayout } from '@/types'
 
@@ -16,6 +17,8 @@ const SetupPage: NextPageWithLayout = () => {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  const gotrueProviders = useGoTrueProviders()
 
   if (!STUDIO_AUTH_GOTRUE) {
     if (typeof window !== 'undefined') router.replace('/projects')
@@ -56,26 +59,30 @@ const SetupPage: NextPageWithLayout = () => {
 
   return (
     <div className="flex flex-col gap-5">
-      <SignInWithGitHub />
+      {gotrueProviders.github && <SignInWithGitHub />}
 
-      <Button
-        asChild
-        block
-        size="large"
-        type="outline"
-        icon={<Lock width={18} height={18} />}
-      >
-        <Link href={{ pathname: '/sign-in-sso', query: router.query }}>Continue with SSO</Link>
-      </Button>
+      {gotrueProviders.sso && (
+        <Button
+          asChild
+          block
+          size="large"
+          type="outline"
+          icon={<Lock width={18} height={18} />}
+        >
+          <Link href={{ pathname: '/sign-in-sso', query: router.query }}>Continue with SSO</Link>
+        </Button>
+      )}
 
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-strong" />
+      {(gotrueProviders.github || gotrueProviders.sso) && (
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-strong" />
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 text-sm bg-studio text-foreground">or</span>
+          </div>
         </div>
-        <div className="relative flex justify-center text-sm">
-          <span className="px-2 text-sm bg-studio text-foreground">or</span>
-        </div>
-      </div>
+      )}
 
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
         <p className="text-sm text-foreground-light">

@@ -109,23 +109,6 @@ services:
           - /auth/v1/
     plugins:
       - name: cors
-      - name: key-auth
-        config:
-          hide_credentials: false
-      - name: request-transformer
-        config:
-          add:
-            headers:
-              - "Authorization: $LUA_AUTH_EXPR"
-          replace:
-            headers:
-              - "Authorization: $LUA_AUTH_EXPR"
-      - name: acl
-        config:
-          hide_groups_header: true
-          allow:
-            - admin
-            - anon
 
   ## Secure PostgREST routes
   - name: rest-v1

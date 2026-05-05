@@ -12,6 +12,7 @@ import { SignInWithGitHub } from '@/components/interfaces/SignIn/SignInWithGitHu
 import { AuthenticationLayout } from '@/components/layouts/AuthenticationLayout'
 import SignInLayout from '@/components/layouts/SignInLayout/SignInLayout'
 import { useCustomContent } from '@/hooks/custom-content/useCustomContent'
+import { useGoTrueProviders } from '@/hooks/misc/useGoTrueProviders'
 import { useIsFeatureEnabled } from '@/hooks/misc/useIsFeatureEnabled'
 import { IS_PLATFORM, STUDIO_AUTH_GOTRUE } from '@/lib/constants'
 import type { NextPageWithLayout } from '@/types'
@@ -36,9 +37,11 @@ const SignInPage: NextPageWithLayout = () => {
     'dashboard_auth:custom_provider',
   ])
 
-  // In GoTrue mode always show OAuth providers (platform gates them behind feature flags)
-  const showGithub = signInWithGithubEnabled || STUDIO_AUTH_GOTRUE
-  const showSso = signInWithSsoEnabled || STUDIO_AUTH_GOTRUE
+  const gotrueProviders = useGoTrueProviders()
+
+  // In GoTrue mode show OAuth providers only when GoTrue has them enabled
+  const showGithub = signInWithGithubEnabled || (STUDIO_AUTH_GOTRUE && gotrueProviders.github)
+  const showSso = signInWithSsoEnabled || (STUDIO_AUTH_GOTRUE && gotrueProviders.sso)
   const showEmail = signInWithEmailEnabled || STUDIO_AUTH_GOTRUE
 
   const showOrDivider = (showGithub || showSso || customProvider) && showEmail
