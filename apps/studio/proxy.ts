@@ -32,7 +32,9 @@ const HOSTED_SUPPORTED_API_URLS = [
 // Paths that bypass the self-hosted auth guard.
 const AUTH_EXEMPT_PREFIXES = [
   '/sign-in',
+  '/setup',
   '/api/self-hosted/session',
+  '/api/self-hosted/bootstrap',
   '/_next',
   '/favicon',
   '/img/',
@@ -100,7 +102,20 @@ export async function proxy(request: NextRequest) {
     )
   }
 
-  // --- Self-hosted: auth guard ---
+  // --- Self-hosted: GoTrue auth guard ---
+  const studioAuthMode = process.env.NEXT_PUBLIC_STUDIO_AUTH
+  if (!IS_PLATFORM && studioAuthMode === 'gotrue') {
+    if (!AUTH_EXEMPT_PREFIXES.some((p) => pathname.startsWith(p))) {
+      // GoTrue mode: the JWT in the Authorization header is checked by Next.js API routes
+      // themselves. For page navigation we rely on the GoTrue client-side session in
+      // localStorage — no cookie to check here. The AuthProvider on the client will
+      // redirect to /sign-in if there is no session.
+      // Nothing to do in the middleware for GoTrue page auth — handled client-side.
+    }
+    return
+  }
+
+  // --- Self-hosted: legacy HMAC session cookie auth guard ---
   const dashboardPassword = process.env.DASHBOARD_PASSWORD
   if (!IS_PLATFORM && dashboardPassword) {
     if (!AUTH_EXEMPT_PREFIXES.some((p) => pathname.startsWith(p))) {

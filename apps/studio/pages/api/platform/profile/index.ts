@@ -2,6 +2,10 @@ import { NextApiRequest, NextApiResponse } from 'next'
 
 import apiWrapper from '@/lib/api/apiWrapper'
 import { DEFAULT_PROJECT } from '@/lib/constants/api'
+import { STUDIO_AUTH_GOTRUE } from '@/lib/constants'
+import { findMemberByGotrueId, addOrgMember, getOrgMembers } from '@/lib/api/self-hosted/membersStore'
+import { gotrueVerifyJwt } from '@/lib/api/self-hosted/studioGoTrue'
+import { getStoredOrganizations } from '@/lib/api/self-hosted/organizationsStore'
 
 export default (req: NextApiRequest, res: NextApiResponse) => apiWrapper(req, res, handler)
 
@@ -10,30 +14,121 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   switch (method) {
     case 'GET':
-      return handleGetAll(req, res)
+      return handleGet(req, res)
+    case 'POST':
+      return handlePost(req, res)
     default:
-      res.setHeader('Allow', ['GET'])
+      res.setHeader('Allow', ['GET', 'POST'])
       res.status(405).json({ data: null, error: { message: `Method ${method} Not Allowed` } })
   }
 }
 
-const handleGetAll = async (req: NextApiRequest, res: NextApiResponse) => {
-  // Platform specific endpoint
-  const response = {
-    id: 1,
-    primary_email: 'johndoe@supabase.io',
-    username: 'johndoe',
-    first_name: 'John',
-    last_name: 'Doe',
-    organizations: [
-      {
-        id: 1,
-        name: process.env.DEFAULT_ORGANIZATION_NAME || 'Default Organization',
-        slug: 'default-org-slug',
-        billing_email: 'billing@supabase.co',
-        projects: [{ ...DEFAULT_PROJECT, connectionString: '' }],
-      },
-    ],
+async function handleGet(req: NextApiRequest, res: NextApiResponse) {
+  if (!STUDIO_AUTH_GOTRUE) {
+    // Legacy self-hosted: return static mock (no real user identity needed)
+    return res.status(200).json({
+      id: 1,
+      primary_email: 'admin@localhost',
+      username: 'admin',
+      first_name: '',
+      last_name: '',
+      organizations: [
+        {
+          id: 1,
+          name: process.env.DEFAULT_ORGANIZATION_NAME || 'Default Organization',
+          slug: 'default-org-slug',
+          billing_email: '',
+          projects: [{ ...DEFAULT_PROJECT, connectionString: '' }],
+        },
+      ],
+    })
   }
-  return res.status(200).json(response)
+
+  // GoTrue mode: decode JWT → find member → return real profile
+  const token = req.headers.authorization?.replace(/bearer /i, '').trim()
+  if (!token) {
+    return res.status(401).json({ error: { message: 'No authorization token' } })
+  }
+
+  const gotrueUser = await gotrueVerifyJwt(token)
+  if (!gotrueUser) {
+    return res.status(401).json({ error: { message: "User's profile not found" } })
+  }
+
+  const found = findMemberByGotrueId(gotrueUser.sub)
+  if (!found) {
+    // Trigger profile creation flow on the client side
+    return res.status(404).json({ error: { message: "User's profile not found" } })
+  }
+
+  const { member, org_slug } = found
+  const orgs = getStoredOrganizations()
+  const org = orgs.find((o) => o.slug === org_slug)
+
+  return res.status(200).json({
+    id: member.id,
+    primary_email: member.primary_email,
+    username: member.username,
+    first_name: '',
+    last_name: '',
+    gotrue_id: member.gotrue_id,
+    organizations: org
+      ? [
+          {
+            id: org.id,
+            name: org.name,
+            slug: org.slug,
+            billing_email: org.billing_email ?? '',
+            projects: [{ ...DEFAULT_PROJECT, connectionString: '' }],
+          },
+        ]
+      : [],
+  })
+}
+
+async function handlePost(req: NextApiRequest, res: NextApiResponse) {
+  if (!STUDIO_AUTH_GOTRUE) {
+    return res.status(200).json({ id: 1, primary_email: 'admin@localhost', username: 'admin' })
+  }
+
+  // Called by ProfileProvider on first login — create the member record from GoTrue identity
+  const token = req.headers.authorization?.replace(/bearer /i, '').trim()
+  if (!token) {
+    return res.status(401).json({ error: { message: 'No authorization token' } })
+  }
+
+  const gotrueUser = await gotrueVerifyJwt(token)
+  if (!gotrueUser) {
+    return res.status(401).json({ error: { message: 'Invalid token' } })
+  }
+
+  // Idempotent: if member already exists, return it
+  const existing = findMemberByGotrueId(gotrueUser.sub)
+  if (existing) {
+    return res.status(409).json({ error: { message: 'Profile already exists' } })
+  }
+
+  // Default org for auto-created profiles
+  const orgs = getStoredOrganizations()
+  const defaultOrg = orgs[0]
+  if (!defaultOrg) {
+    return res.status(500).json({ error: { message: 'No organization found' } })
+  }
+
+  // Determine role: first user in org → Owner (1), otherwise Developer (3)
+  const existingMembers = getOrgMembers(defaultOrg.slug)
+  const role_id = existingMembers.length === 0 ? 1 : 3
+
+  const member = addOrgMember(defaultOrg.slug, {
+    primary_email: gotrueUser.email,
+    role_id,
+    gotrue_id_override: gotrueUser.sub,
+  })
+
+  return res.status(200).json({
+    id: member.id,
+    primary_email: member.primary_email,
+    username: member.username,
+    gotrue_id: member.gotrue_id,
+  })
 }

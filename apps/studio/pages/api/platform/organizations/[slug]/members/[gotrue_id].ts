@@ -2,6 +2,8 @@ import { NextApiRequest, NextApiResponse } from 'next'
 
 import apiWrapper from '@/lib/api/apiWrapper'
 import { assignOrgMemberRole, deleteOrgMember } from '@/lib/api/self-hosted/membersStore'
+import { STUDIO_AUTH_GOTRUE } from '@/lib/constants'
+import { gotrueAdminDeleteUser } from '@/lib/api/self-hosted/studioGoTrue'
 
 export default (req: NextApiRequest, res: NextApiResponse) => apiWrapper(req, res, handler)
 
@@ -11,6 +13,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'DELETE') {
     const removed = deleteOrgMember(slug, gotrue_id)
     if (!removed) return res.status(404).json({ data: null, error: { message: 'Member not found' } })
+
+    // In GoTrue mode also remove the user from GoTrue (best-effort, don't fail the request)
+    if (STUDIO_AUTH_GOTRUE) {
+      gotrueAdminDeleteUser(gotrue_id).catch((err) =>
+        console.warn(`Failed to delete GoTrue user ${gotrue_id}:`, err.message)
+      )
+    }
+
     return res.status(200).json({ message: 'Member removed' })
   }
 

@@ -93,7 +93,14 @@ export function getOrgMembers(slug: string): StoredMember[] {
 
 export function addOrgMember(
   slug: string,
-  data: { primary_email: string; role_id: number; username?: string; password?: string }
+  data: {
+    primary_email: string
+    role_id: number
+    username?: string
+    password?: string
+    /** Provide the real GoTrue user id (sub) to use as gotrue_id instead of a random UUID. */
+    gotrue_id_override?: string
+  }
 ): StoredMember {
   const store = read()
   const org = orgData(store, slug)
@@ -101,7 +108,7 @@ export function addOrgMember(
   const maxId = org.members.reduce((m, x) => Math.max(m, x.id), 0)
   const member: StoredMember = {
     id: maxId + 1,
-    gotrue_id: randomUUID(),
+    gotrue_id: data.gotrue_id_override ?? randomUUID(),
     username: data.username ?? data.primary_email.split('@')[0],
     primary_email: data.primary_email,
     role_ids: [data.role_id],

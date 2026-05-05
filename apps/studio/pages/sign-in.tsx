@@ -13,7 +13,7 @@ import { AuthenticationLayout } from '@/components/layouts/AuthenticationLayout'
 import SignInLayout from '@/components/layouts/SignInLayout/SignInLayout'
 import { useCustomContent } from '@/hooks/custom-content/useCustomContent'
 import { useIsFeatureEnabled } from '@/hooks/misc/useIsFeatureEnabled'
-import { IS_PLATFORM } from '@/lib/constants'
+import { IS_PLATFORM, STUDIO_AUTH_GOTRUE } from '@/lib/constants'
 import type { NextPageWithLayout } from '@/types'
 
 const SignInPage: NextPageWithLayout = () => {
@@ -40,6 +40,25 @@ const SignInPage: NextPageWithLayout = () => {
     (signInWithGithubEnabled || signInWithSsoEnabled || customProvider) && signInWithEmailEnabled
 
   useEffect(() => {
+    if (STUDIO_AUTH_GOTRUE) {
+      // Redirect to setup if no admin has been created yet
+      fetch('/api/self-hosted/bootstrap', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+        .then((r) => {
+          if (r.status === 400 && r.headers.get('content-type')?.includes('json')) {
+            return r.json().then((b) => {
+              if (b.error === 'email and password are required') {
+                // Bootstrap endpoint reachable and no admin exists yet — go to setup
+                router.replace('/setup')
+              }
+            })
+          }
+          // 409 = already bootstrapped, stay on sign-in
+        })
+        .catch(() => {
+          // ignore, stay on sign-in
+        })
+      return
+    }
     if (!IS_PLATFORM) {
       fetch('/api/self-hosted/session')
         .then((r) => r.json())
@@ -54,9 +73,11 @@ const SignInPage: NextPageWithLayout = () => {
     }
   }, [router])
 
-  if (!IS_PLATFORM && selfHostedAuthRequired) {
+  if (!IS_PLATFORM && !STUDIO_AUTH_GOTRUE && selfHostedAuthRequired) {
     return <SelfHostedSignInForm />
   }
+
+  // In GoTrue mode the real sign-in form below handles everything (same as platform)
 
   return (
     <>

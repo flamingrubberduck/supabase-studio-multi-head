@@ -9,7 +9,7 @@ import {
 import { PropsWithChildren, useCallback, useEffect } from 'react'
 import { toast } from 'sonner'
 
-import { GOTRUE_ERRORS, IS_PLATFORM } from './constants'
+import { GOTRUE_ERRORS, IS_PLATFORM, STUDIO_AUTH_GOTRUE } from './constants'
 import { useAiAssistantStateSnapshot } from '@/state/ai-assistant-state'
 
 const AuthErrorToaster = ({ children }: PropsWithChildren) => {
@@ -34,7 +34,7 @@ const AuthErrorToaster = ({ children }: PropsWithChildren) => {
 
 export const AuthProvider = ({ children }: PropsWithChildren) => {
   return (
-    <AuthProviderInternal alwaysLoggedIn={!IS_PLATFORM}>
+    <AuthProviderInternal alwaysLoggedIn={!IS_PLATFORM && !STUDIO_AUTH_GOTRUE}>
       <AuthErrorToaster>{children}</AuthErrorToaster>
     </AuthProviderInternal>
   )
