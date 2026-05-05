@@ -1,5 +1,5 @@
 import fs from 'node:fs'
-import { randomUUID } from 'node:crypto'
+import { randomUUID, scryptSync, randomBytes, timingSafeEqual } from 'node:crypto'
 import path from 'node:path'
 
 const DATA_DIR = process.env.STUDIO_DATA_DIR || path.join(process.cwd(), '.studio-data')
@@ -22,6 +22,45 @@ export interface StoredMember {
   mfa_enabled: boolean
   is_sso_user: boolean
   metadata: Record<string, unknown>
+  password_hash?: string
+}
+
+export function hashPassword(password: string): string {
+  const salt = randomBytes(16).toString('hex')
+  const hash = scryptSync(password, salt, 64).toString('hex')
+  return `${salt}:${hash}`
+}
+
+export function verifyMemberPassword(password: string, stored: string): boolean {
+  const colonIdx = stored.indexOf(':')
+  if (colonIdx === -1) return false
+  const salt = stored.slice(0, colonIdx)
+  const hash = stored.slice(colonIdx + 1)
+  try {
+    const derived = scryptSync(password, salt, 64)
+    return timingSafeEqual(derived, Buffer.from(hash, 'hex'))
+  } catch {
+    return false
+  }
+}
+
+export function findMemberByEmail(email: string): { member: StoredMember; org_slug: string } | null {
+  const store = read()
+  const lc = email.toLowerCase()
+  for (const [slug, data] of Object.entries(store)) {
+    const member = data.members.find((m) => m.primary_email.toLowerCase() === lc)
+    if (member) return { member, org_slug: slug }
+  }
+  return null
+}
+
+export function findMemberByGotrueId(gotrue_id: string): { member: StoredMember; org_slug: string } | null {
+  const store = read()
+  for (const [slug, data] of Object.entries(store)) {
+    const member = data.members.find((m) => m.gotrue_id === gotrue_id)
+    if (member) return { member, org_slug: slug }
+  }
+  return null
 }
 
 interface OrgData {
@@ -54,7 +93,7 @@ export function getOrgMembers(slug: string): StoredMember[] {
 
 export function addOrgMember(
   slug: string,
-  data: { primary_email: string; role_id: number; username?: string }
+  data: { primary_email: string; role_id: number; username?: string; password?: string }
 ): StoredMember {
   const store = read()
   const org = orgData(store, slug)
@@ -70,6 +109,7 @@ export function addOrgMember(
     mfa_enabled: false,
     is_sso_user: false,
     metadata: {},
+    ...(data.password ? { password_hash: hashPassword(data.password) } : {}),
   }
 
   org.members.push(member)

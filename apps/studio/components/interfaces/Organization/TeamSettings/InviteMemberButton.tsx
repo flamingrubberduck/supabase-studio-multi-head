@@ -19,6 +19,7 @@ import {
   Form_Shadcn_,
   FormControl_Shadcn_,
   FormField_Shadcn_,
+  Input_Shadcn_,
   Select_Shadcn_,
   SelectContent_Shadcn_,
   SelectGroup_Shadcn_,
@@ -45,6 +46,7 @@ import { useHasAccessToProjectLevelPermissions } from '@/data/subscriptions/org-
 import { useCheckEntitlements } from '@/hooks/misc/useCheckEntitlements'
 import { doPermissionsCheck, useGetPermissions } from '@/hooks/misc/useCheckPermissions'
 import { useIsFeatureEnabled } from '@/hooks/misc/useIsFeatureEnabled'
+import { useCurrentMember } from '@/hooks/misc/useCurrentMember'
 import { useSelectedOrganizationQuery } from '@/hooks/misc/useSelectedOrganization'
 import { useConfirmOnClose } from '@/hooks/ui/useConfirmOnClose'
 import { DOCS_URL, IS_PLATFORM } from '@/lib/constants'
@@ -62,6 +64,7 @@ export const InviteMemberButton = () => {
   const { profile } = useProfile()
   const { data: organization } = useSelectedOrganizationQuery()
   const { permissions: permissions } = useGetPermissions()
+  const { canManageTeam } = useCurrentMember()
 
   const { organizationMembersCreate: organizationMembersCreationEnabled } = useIsFeatureEnabled([
     'organization_members:create',
@@ -83,6 +86,7 @@ export const InviteMemberButton = () => {
     applyToOrg: true,
     projectRef: '',
     requireSso: 'auto' as const,
+    password: '',
   }
 
   const { hasAccess: hasAccessToSso } = useCheckEntitlements('auth.platform.sso')
@@ -99,9 +103,8 @@ export const InviteMemberButton = () => {
     permissions ?? []
   )
 
-  const canInviteMembers =
-    !IS_PLATFORM ||
-    (hasOrgRole &&
+  const canInviteMembers = IS_PLATFORM
+    ? hasOrgRole &&
       rolesAddable.length > 0 &&
       orgScopedRoles.some(({ id: role_id }) =>
         doPermissionsCheck(
@@ -111,7 +114,8 @@ export const InviteMemberButton = () => {
           { resource: { role_id } },
           organization?.slug
         )
-      ))
+      )
+    : canManageTeam
 
   const { mutateAsync: inviteMemberAsync, isPending: isInviting } =
     useOrganizationCreateInvitationMutation()
@@ -142,6 +146,9 @@ export const InviteMemberButton = () => {
     applyToOrg: z.boolean(),
     projectRef: z.string(),
     requireSso: z.enum(['auto', 'sso', 'non-sso']),
+    password: IS_PLATFORM
+      ? z.string().optional()
+      : z.string().min(8, 'Password must be at least 8 characters'),
   })
 
   const form = useForm<z.infer<typeof FormSchema>>({
@@ -206,6 +213,8 @@ export const InviteMemberButton = () => {
           ? { requireSso: false }
           : {} // 'auto' - let backend use automatic behavior
 
+    const passwordPayload = !IS_PLATFORM && values.password ? { password: values.password } : {}
+
     const results = await Promise.allSettled(
       toInvite.map((emailAddress) =>
         inviteMemberAsync({
@@ -214,6 +223,7 @@ export const InviteMemberButton = () => {
           roleId: Number(values.role),
           ...projectPayload,
           ...ssoPayload,
+          ...passwordPayload,
         })
       )
     )
@@ -456,6 +466,30 @@ export const InviteMemberButton = () => {
                   </FormItemLayout>
                 )}
               />
+              {!IS_PLATFORM && (
+                <FormField_Shadcn_
+                  name="password"
+                  control={form.control}
+                  render={({ field }) => (
+                    <FormItemLayout
+                      label="Password"
+                      description="Member will use this password to sign in"
+                    >
+                      <FormControl_Shadcn_>
+                        <Input_Shadcn_
+                          {...field}
+                          type="password"
+                          autoComplete="new-password"
+                          disabled={isInviting}
+                          placeholder="Min. 8 characters"
+                          data-1p-ignore
+                          data-lpignore="true"
+                        />
+                      </FormControl_Shadcn_>
+                    </FormItemLayout>
+                  )}
+                />
+              )}
             </DialogSection>
             <DialogFooter className="!justify-between">
               <Button type="default" onClick={confirmOnClose}>

@@ -46,21 +46,36 @@ function hexToBytes(hex: string): Uint8Array {
   return bytes
 }
 
+// Decode base64url to a plain string (edge-runtime compatible, no Node.js Buffer)
+function b64urlToString(s: string): string {
+  const b64 = s.replace(/-/g, '+').replace(/_/g, '/')
+  const padded = b64 + '==='.slice((b64.length + 3) % 4 || 4)
+  return atob(padded)
+}
+
+// Token format: {base64url(JSON payload)}.{HMAC-hex(base64url)}
 async function verifySessionToken(token: string, secret: string): Promise<boolean> {
   try {
     const dot = token.indexOf('.')
     if (dot === -1) return false
-    const ts = token.slice(0, dot)
+    const b64 = token.slice(0, dot)
     const sig = token.slice(dot + 1)
-    const age = Date.now() - parseInt(ts, 10)
-    if (isNaN(age) || age > 7 * 24 * 60 * 60 * 1000) return false
+
+    // Verify HMAC of the base64url payload
     const keyData = new TextEncoder().encode(secret)
     const key = await crypto.subtle.importKey(
       'raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']
     )
     const sigBytes = hexToBytes(sig)
-    const msgBytes = new TextEncoder().encode(ts)
-    return await crypto.subtle.verify('HMAC', key, sigBytes.buffer as ArrayBuffer, msgBytes)
+    const msgBytes = new TextEncoder().encode(b64)
+    if (!(await crypto.subtle.verify('HMAC', key, sigBytes.buffer as ArrayBuffer, msgBytes))) {
+      return false
+    }
+
+    // Decode payload and check timestamp
+    const payload = JSON.parse(b64urlToString(b64))
+    const age = Date.now() - payload.ts
+    return !isNaN(age) && age <= 7 * 24 * 60 * 60 * 1000
   } catch {
     return false
   }

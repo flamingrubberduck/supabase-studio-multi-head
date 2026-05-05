@@ -4,7 +4,7 @@ import { Button, Input_Shadcn_, Label_Shadcn_ } from 'ui'
 
 export const SelfHostedSignInForm = () => {
   const router = useRouter()
-  const [username, setUsername] = useState('supabase')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -18,7 +18,7 @@ export const SelfHostedSignInForm = () => {
       const res = await fetch('/api/self-hosted/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ email, password }),
       })
 
       if (!res.ok) {
@@ -39,13 +39,14 @@ export const SelfHostedSignInForm = () => {
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <Label_Shadcn_ htmlFor="sh-username">Username</Label_Shadcn_>
+        <Label_Shadcn_ htmlFor="sh-email">Email</Label_Shadcn_>
         <Input_Shadcn_
-          id="sh-username"
+          id="sh-email"
           type="text"
-          autoComplete="username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          autoComplete="email"
+          placeholder="admin@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           disabled={loading}
         />
       </div>
