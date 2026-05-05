@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { ChevronDown, ChevronUp, Database, Server, ShieldCheck } from 'lucide-react'
+import { ChevronDown, ChevronUp, Database, Layers, Server, ShieldCheck } from 'lucide-react'
 import { useRouter } from 'next/router'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
@@ -14,7 +14,14 @@ import { useProjectCreateMutation } from '@/data/projects/project-create-mutatio
 import { useLicenseQuery } from '@/data/misc/license-query'
 import { useSelectedOrganizationQuery } from '@/hooks/misc/useSelectedOrganization'
 
-type DeployMode = 'standalone' | 'standby' | 'cluster'
+type DeployMode = 'standalone' | 'standby' | 'cluster' | 'embedded'
+type LicenseTier = 'free' | 'business' | 'enterprise'
+
+const TIER_RANK: Record<LicenseTier, number> = { free: 0, business: 1, enterprise: 2 }
+
+function meetsTier(current: LicenseTier | undefined, required: LicenseTier): boolean {
+  return TIER_RANK[current ?? 'free'] >= TIER_RANK[required]
+}
 
 const schema = z.object({
   projectName: z
@@ -42,7 +49,13 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-const DEPLOY_MODES: { value: DeployMode; label: string; description: string; icon: React.ReactNode }[] = [
+const DEPLOY_MODES: {
+  value: DeployMode
+  label: string
+  description: string
+  icon: React.ReactNode
+  requiredTier?: LicenseTier
+}[] = [
   {
     value: 'standalone',
     label: 'Standalone',
@@ -50,26 +63,32 @@ const DEPLOY_MODES: { value: DeployMode; label: string; description: string; ico
     icon: <Server size={16} />,
   },
   {
+    value: 'embedded',
+    label: 'Embedded (shared infrastructure)',
+    description: 'New database inside the existing Postgres instance. No new containers needed.',
+    icon: <Layers size={16} />,
+  },
+  {
     value: 'standby',
     label: 'With failover standby',
     description: 'A warm standby promoted automatically in ~90 s if the primary fails.',
     icon: <ShieldCheck size={16} />,
+    requiredTier: 'business',
   },
   {
     value: 'cluster',
     label: 'Cluster mode',
     description: 'One master + read replicas. Auto-promotes the next replica on master failure.',
     icon: <Database size={16} />,
+    requiredTier: 'enterprise',
   },
 ]
-
-const PRO_MODES: DeployMode[] = ['standby', 'cluster']
 
 export function SelfHostedProjectCreation() {
   const router = useRouter()
   const { data: currentOrg } = useSelectedOrganizationQuery()
   const { data: license } = useLicenseQuery()
-  const isPro = license?.tier === 'pro'
+  const currentTier = license?.tier
   const [deployMode, setDeployMode] = useState<DeployMode>('standalone')
   const [isPostCreate, setIsPostCreate] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -95,8 +114,12 @@ export function SelfHostedProjectCreation() {
         organizationSlug: currentOrg.slug,
         dbPass: '',
         selfHosted: {
-          docker_host,
-          ...(deployMode === 'cluster' && { cluster_mode: true }),
+          ...(deployMode === 'embedded'
+            ? { creation_mode: 'embedded' }
+            : {
+                docker_host,
+                ...(deployMode === 'cluster' && { cluster_mode: true }),
+              }),
         },
       })
     } catch (err) {
@@ -129,7 +152,7 @@ export function SelfHostedProjectCreation() {
 
   const submitLabel = () => {
     if (isPostCreate) return 'Provisioning standby...'
-    if (isCreating) return 'Launching stack...'
+    if (isCreating) return deployMode === 'embedded' ? 'Creating database...' : 'Launching stack...'
     return 'Create project'
   }
 
@@ -181,15 +204,15 @@ export function SelfHostedProjectCreation() {
             >
               <div className="flex flex-col gap-2 w-full">
                 {DEPLOY_MODES.map((mode) => {
-                  const isProMode = PRO_MODES.includes(mode.value)
-                  const isLocked = isProMode && !isPro
+                  const isLocked = mode.requiredTier ? !meetsTier(currentTier, mode.requiredTier) : false
+                  const tierLabel = mode.requiredTier === 'enterprise' ? 'Enterprise' : 'Business'
                   return (
                     <button
                       key={mode.value}
                       type="button"
                       disabled={isPending || isLocked}
                       onClick={() => !isLocked && setDeployMode(mode.value)}
-                      title={isLocked ? 'Requires Pro license' : undefined}
+                      title={isLocked ? `Requires ${tierLabel} license` : undefined}
                       className={[
                         'flex items-start gap-3 rounded-md border px-3 py-2.5 text-left transition-colors',
                         isLocked
@@ -205,7 +228,7 @@ export function SelfHostedProjectCreation() {
                           {mode.label}
                           {isLocked && (
                             <span className="inline-flex items-center rounded-sm bg-surface-300 px-1.5 py-0.5 text-[10px] font-medium text-foreground-muted">
-                              Pro
+                              {tierLabel}
                             </span>
                           )}
                         </span>
@@ -217,16 +240,18 @@ export function SelfHostedProjectCreation() {
               </div>
             </FormItemLayout>
 
-            <button
-              type="button"
-              onClick={() => setShowAdvanced((v) => !v)}
-              className="flex items-center gap-1 text-xs text-foreground-lighter hover:text-foreground transition-colors"
-            >
-              {showAdvanced ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-              Advanced options
-            </button>
+            {deployMode !== 'embedded' && (
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((v) => !v)}
+                className="flex items-center gap-1 text-xs text-foreground-lighter hover:text-foreground transition-colors"
+              >
+                {showAdvanced ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                Advanced options
+              </button>
+            )}
 
-            {showAdvanced && (
+            {deployMode !== 'embedded' && showAdvanced && (
               <FormField_Shadcn_
                 control={form.control}
                 name="dockerHost"

@@ -29,6 +29,32 @@ const handleGet = async (req: NextApiRequest, res: NextApiResponse<ResponseData>
     return res.status(200).json([])
   }
 
+  // Embedded projects have no dedicated Supavisor tenant — return the direct
+  // Postgres connection so the pooler strings in Studio show the correct db_name.
+  if (project.creation_mode === 'embedded') {
+    const embHost = project.db_host ?? (process.env.MULTI_HEAD_HOST || 'localhost')
+    const embPort = project.db_port ?? parseInt(process.env.POSTGRES_PORT || '5432', 10)
+    const embName = project.db_name ?? 'postgres'
+    const embUser = project.db_user ?? 'postgres'
+    const connectionString = `postgresql://${embUser}:[YOUR-PASSWORD]@${embHost}:${embPort}/${embName}`
+    return res.status(200).json([
+      {
+        connection_string: connectionString,
+        connectionString: connectionString,
+        database_type: 'PRIMARY' as const,
+        db_host: embHost,
+        db_name: embName,
+        db_port: embPort,
+        db_user: embUser,
+        default_pool_size: 15,
+        identifier: ref,
+        is_using_scram_auth: false,
+        max_client_conn: 200,
+        pool_mode: 'transaction' as const,
+      },
+    ])
+  }
+
   // Derive pooler port from stored value, or fall back to deriving from kong_http_port
   // using the same PORT_INCREMENT (10) the orchestrator uses.
   const defaultKongPort = parseInt(process.env.KONG_HTTP_PORT || '8000', 10)

@@ -55,9 +55,10 @@ export const ProjectTableRow = ({
   const githubRepository = githubIntegration?.metadata.name ?? undefined
   const handleNavigation = createNavigationHandler(url, router)
 
-  // Failover fields — added by self-hosted multi-head, absent on cloud
-  const p = project as typeof project & { role?: string; primary_name?: string }
+  // Failover / embedded fields — added by self-hosted multi-head, absent on cloud
+  const p = project as typeof project & { role?: string; primary_name?: string; creation_mode?: string }
   const isStandby = p.role === 'standby'
+  const isEmbedded = p.creation_mode === 'embedded'
   const primaryName = p.primary_name
 
   const handleCopyProjectRef = (e: React.SyntheticEvent) => {
@@ -95,6 +96,11 @@ export const ProjectTableRow = ({
                 {isStandby && primaryName && (
                   <Badge variant="secondary" className="text-[10px] leading-none py-0.5 px-1.5 text-foreground-muted">
                     for {primaryName}
+                  </Badge>
+                )}
+                {isEmbedded && (
+                  <Badge variant="default" className="text-[10px] leading-none py-0.5 px-1.5">
+                    Embedded
                   </Badge>
                 )}
               </div>

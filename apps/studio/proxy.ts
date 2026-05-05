@@ -1,10 +1,7 @@
 import type { NextRequest } from 'next/server'
+import { NextResponse } from 'next/server'
 
 import { IS_PLATFORM } from '@/lib/constants'
-
-export const config = {
-  matcher: '/api/:function*',
-}
 
 // [Joshen] Return 404 for all next.js API endpoints EXCEPT the ones we use in hosted:
 const HOSTED_SUPPORTED_API_URLS = [
@@ -32,14 +29,73 @@ const HOSTED_SUPPORTED_API_URLS = [
   '/content/graphql',
 ]
 
-export function proxy(request: NextRequest) {
+// Paths that bypass the self-hosted auth guard.
+const AUTH_EXEMPT_PREFIXES = [
+  '/sign-in',
+  '/api/self-hosted/session',
+  '/_next',
+  '/favicon',
+  '/img/',
+]
+
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2)
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16)
+  }
+  return bytes
+}
+
+async function verifySessionToken(token: string, secret: string): Promise<boolean> {
+  try {
+    const dot = token.indexOf('.')
+    if (dot === -1) return false
+    const ts = token.slice(0, dot)
+    const sig = token.slice(dot + 1)
+    const age = Date.now() - parseInt(ts, 10)
+    if (isNaN(age) || age > 7 * 24 * 60 * 60 * 1000) return false
+    const keyData = new TextEncoder().encode(secret)
+    const key = await crypto.subtle.importKey(
+      'raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']
+    )
+    const sigBytes = hexToBytes(sig)
+    const msgBytes = new TextEncoder().encode(ts)
+    return await crypto.subtle.verify('HMAC', key, sigBytes.buffer as ArrayBuffer, msgBytes)
+  } catch {
+    return false
+  }
+}
+
+export const config = {
+  matcher: ['/((?!_next/static|_next/image|favicon\\.ico).*)'],
+}
+
+export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
+  // --- Hosted: block unsupported API routes ---
   if (
     IS_PLATFORM &&
-    !HOSTED_SUPPORTED_API_URLS.some((url) => request.nextUrl.pathname.endsWith(url))
+    pathname.startsWith('/api/') &&
+    !HOSTED_SUPPORTED_API_URLS.some((url) => pathname.endsWith(url))
   ) {
     return Response.json(
       { success: false, message: 'Endpoint not supported on hosted' },
       { status: 404 }
     )
+  }
+
+  // --- Self-hosted: auth guard ---
+  const dashboardPassword = process.env.DASHBOARD_PASSWORD
+  if (!IS_PLATFORM && dashboardPassword) {
+    if (!AUTH_EXEMPT_PREFIXES.some((p) => pathname.startsWith(p))) {
+      const secret = process.env.STUDIO_SESSION_SECRET || dashboardPassword
+      const cookieValue = request.cookies.get('studio_session')?.value
+      if (!cookieValue || !(await verifySessionToken(cookieValue, secret))) {
+        const signInUrl = request.nextUrl.clone()
+        signInUrl.pathname = '/sign-in'
+        return NextResponse.redirect(signInUrl)
+      }
+    }
   }
 }

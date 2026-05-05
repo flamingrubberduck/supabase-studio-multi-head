@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next'
 
 import apiWrapper from '@/lib/api/apiWrapper'
 import { teardownProjectStack } from '@/lib/api/self-hosted/orchestrator'
+import { dropEmbeddedDatabase } from '@/lib/api/self-hosted/embeddedOrchestrator'
 import { dropReplicationSlot } from '@/lib/api/self-hosted/replicationManager'
 import { deleteStoredProject, getStoredProjectByRef, getStoredProjects, updateProjectFields } from '@/lib/api/self-hosted/projectsStore'
 import { PROJECT_REST_URL } from '@/lib/constants/api'
@@ -114,8 +115,14 @@ const handleDelete = async (req: NextApiRequest, res: NextApiResponse) => {
   // Remove the project itself
   deleteStoredProject(ref)
 
-  // Tear down the project's own Docker stack in the background
-  if (project.docker_project) {
+  // Tear down: Docker Compose stack or embedded Postgres database
+  if (project.creation_mode === 'embedded') {
+    dropEmbeddedDatabase(ref).catch((err: unknown) => {
+      console.error(
+        `[embedded] DB drop failed for ${ref}: ${err instanceof Error ? err.message : err}`
+      )
+    })
+  } else if (project.docker_project) {
     teardownProjectStack(ref, project.docker_project, project.docker_host).catch((err: unknown) => {
       console.error(
         `[multi-head] Stack teardown failed for ${ref}: ${err instanceof Error ? err.message : err}`

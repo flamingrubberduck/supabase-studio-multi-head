@@ -62,6 +62,11 @@ export interface StoredProject {
   // Remote Docker host (e.g. "ssh://user@host", "tcp://host:2376")
   // undefined = local Docker daemon
   docker_host?: string
+
+  // How this project was created:
+  //   'stack'    — full Docker Compose stack (default)
+  //   'embedded' — Postgres database inside the existing instance (no new containers)
+  creation_mode?: 'stack' | 'embedded'
 }
 
 const DATA_DIR =
@@ -277,4 +282,57 @@ export function updateProjectFields(ref: string, patch: Partial<StoredProject>):
   const existing = readFromDisk()
   const updated = existing.map((p) => (p.ref === ref ? { ...p, ...patch } : p))
   writeToDisk(updated)
+}
+
+export interface EmbeddedProjectData {
+  name: string
+  organization_slug?: string
+  public_url: string
+  db_host: string
+  db_port: number
+  db_user: string
+  db_name: string
+  db_password: string
+  anon_key: string
+  service_key: string
+  jwt_secret: string
+}
+
+/**
+ * Stores an embedded project record with a caller-supplied ref.
+ * Unlike importStoredProject, the ref is pre-determined so the database name
+ * (supabase_<ref>) can be created before this record is persisted.
+ */
+export function createEmbeddedStoredProject(ref: string, data: EmbeddedProjectData): StoredProject {
+  const existing = readFromDisk()
+  const all = getStoredProjects()
+  const id = Math.max(...all.map((p) => p.id), 0) + 1
+
+  const orgSlug = data.organization_slug ?? 'default-org-slug'
+  const org = getStoredOrganizationBySlug(orgSlug)
+
+  const project: StoredProject = {
+    id,
+    ref,
+    name: data.name,
+    organization_id: org?.id ?? 1,
+    organization_slug: orgSlug,
+    cloud_provider: 'localhost',
+    status: 'ACTIVE_HEALTHY',
+    region: 'local',
+    inserted_at: new Date().toISOString(),
+    public_url: data.public_url,
+    db_host: data.db_host,
+    db_port: data.db_port,
+    db_user: data.db_user,
+    db_name: data.db_name,
+    db_password: data.db_password,
+    anon_key: data.anon_key,
+    service_key: data.service_key,
+    jwt_secret: data.jwt_secret,
+    creation_mode: 'embedded',
+  }
+
+  writeToDisk([...existing, project])
+  return project
 }

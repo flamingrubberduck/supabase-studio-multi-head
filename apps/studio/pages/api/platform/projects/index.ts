@@ -1,8 +1,10 @@
+import crypto from 'node:crypto'
 import { NextApiRequest, NextApiResponse } from 'next'
 
 import apiWrapper from '@/lib/api/apiWrapper'
 import {
   createStoredProject,
+  createEmbeddedStoredProject,
   getStoredProjects,
   updateProjectFields,
   updateProjectStatus,
@@ -16,6 +18,11 @@ import {
   launchProjectStack,
   waitForProjectHealth,
 } from '@/lib/api/self-hosted/orchestrator'
+import {
+  createEmbeddedDatabase,
+  embeddedConnectionInfo,
+  embeddedDbName,
+} from '@/lib/api/self-hosted/embeddedOrchestrator'
 import { provisionReplica } from '@/lib/api/self-hosted/clusterManager'
 import { requireTier } from '@/lib/api/self-hosted/licenseManager'
 
@@ -59,7 +66,7 @@ const handleGetAll = async (req: NextApiRequest, res: NextApiResponse) => {
 }
 
 const handleCreate = async (req: NextApiRequest, res: NextApiResponse) => {
-  const { name, organization_slug, docker_host, cluster_mode } = req.body
+  const { name, organization_slug, docker_host, cluster_mode, creation_mode } = req.body
 
   if (!name?.trim()) {
     return res.status(400).json({ data: null, error: { message: 'Project name is required' } })
@@ -68,6 +75,56 @@ const handleCreate = async (req: NextApiRequest, res: NextApiResponse) => {
   if (cluster_mode) {
     const license = requireTier('cluster')
     if (!license.ok) return res.status(402).json({ data: null, error: { message: license.message } })
+  }
+
+  // ── Embedded mode: create a database inside the existing Postgres instance ──
+  if (creation_mode === 'embedded') {
+    if (!process.env.PG_META_CRYPTO_KEY) {
+      return res.status(400).json({
+        data: null,
+        error: {
+          message:
+            'PG_META_CRYPTO_KEY is not configured. ' +
+            'Embedded projects require it to route Studio requests to the new database.',
+        },
+      })
+    }
+
+    const ref = crypto.randomBytes(6).toString('hex')
+
+    try {
+      await createEmbeddedDatabase(ref)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return res.status(500).json({ data: null, error: { message: msg } })
+    }
+
+    const conn = embeddedConnectionInfo()
+    const project = createEmbeddedStoredProject(ref, {
+      name: name.trim(),
+      organization_slug: organization_slug ?? 'default-org-slug',
+      public_url: process.env.SUPABASE_PUBLIC_URL || 'http://localhost:8000',
+      db_host: conn.db_host,
+      db_port: conn.db_port,
+      db_user: conn.db_user,
+      db_name: embeddedDbName(ref),
+      db_password: conn.db_password,
+      anon_key: process.env.SUPABASE_ANON_KEY || '',
+      service_key: process.env.SUPABASE_SERVICE_KEY || '',
+      jwt_secret: process.env.AUTH_JWT_SECRET || '',
+    })
+
+    return res.status(201).json({
+      id: project.id,
+      ref: project.ref,
+      name: project.name,
+      organization_id: project.organization_id,
+      organization_slug: project.organization_slug,
+      cloud_provider: project.cloud_provider,
+      status: 'ACTIVE_HEALTHY',
+      region: project.region,
+      inserted_at: project.inserted_at,
+    })
   }
 
   if (!process.env.PG_META_CRYPTO_KEY) {

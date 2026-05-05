@@ -41,6 +41,7 @@ export type ProjectCreateVariables = {
     public_url?: string
     docker_host?: string
     cluster_mode?: boolean
+    creation_mode?: 'stack' | 'embedded'
   }
 }
 

@@ -55,7 +55,8 @@ const handleGetAll = async (req: NextApiRequest, res: NextApiResponse) => {
       public_url: p.public_url,
       kong_http_port: p.kong_http_port,
       is_branch: false,
-      // Failover / cluster fields — undefined on non-self-hosted, stripped by JSON.stringify
+      // Self-hosted extension fields — undefined on cloud, stripped by JSON.stringify
+      creation_mode: p.creation_mode,
       role: p.role,
       primary_ref: p.primary_ref,
       primary_name: p.primary_ref ? nameByRef[p.primary_ref] : undefined,

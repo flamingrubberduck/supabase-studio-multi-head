@@ -50,9 +50,10 @@ export const ProjectCard = ({
   const providerLabel =
     project.cloud_provider === 'AWS_NIMBUS' ? infraAwsNimbusLabel : project.cloud_provider
 
-  // Failover fields — added by self-hosted multi-head, absent on cloud
-  const p = project as typeof project & { role?: string; primary_name?: string }
+  // Failover / embedded fields — added by self-hosted multi-head, absent on cloud
+  const p = project as typeof project & { role?: string; primary_name?: string; creation_mode?: string }
   const isStandby = p.role === 'standby'
+  const isEmbedded = p.creation_mode === 'embedded'
   const primaryName = p.primary_name
 
   const desc = isStandby
@@ -92,6 +93,11 @@ export const ProjectCard = ({
                     {isStandby && (
                       <Badge variant="warning" className="shrink-0 text-[10px] leading-none py-0.5 px-1.5">
                         Standby
+                      </Badge>
+                    )}
+                    {isEmbedded && (
+                      <Badge variant="default" className="shrink-0 text-[10px] leading-none py-0.5 px-1.5">
+                        Embedded
                       </Badge>
                     )}
                   </div>
