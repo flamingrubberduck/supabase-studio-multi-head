@@ -76,7 +76,25 @@ const PROJECTS_FILE = path.join(DATA_DIR, 'projects.json')
 function readFromDisk(): StoredProject[] {
   try {
     if (!fs.existsSync(PROJECTS_FILE)) return []
-    return JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8'))
+    const projects: StoredProject[] = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf-8'))
+
+    // Backfill creation_mode for embedded projects created before this field was introduced.
+    // Embedded projects are uniquely identified by cloud_provider === 'localhost'.
+    let needsWrite = false
+    const migrated = projects.map((p) => {
+      if (p.cloud_provider === 'localhost' && !p.creation_mode) {
+        needsWrite = true
+        return { ...p, creation_mode: 'embedded' as const }
+      }
+      return p
+    })
+
+    if (needsWrite) {
+      fs.mkdirSync(DATA_DIR, { recursive: true })
+      fs.writeFileSync(PROJECTS_FILE, JSON.stringify(migrated, null, 2), 'utf-8')
+    }
+
+    return migrated
   } catch {
     return []
   }
