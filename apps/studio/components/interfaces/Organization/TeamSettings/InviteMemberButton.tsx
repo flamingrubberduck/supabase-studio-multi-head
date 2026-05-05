@@ -47,7 +47,7 @@ import { doPermissionsCheck, useGetPermissions } from '@/hooks/misc/useCheckPerm
 import { useIsFeatureEnabled } from '@/hooks/misc/useIsFeatureEnabled'
 import { useSelectedOrganizationQuery } from '@/hooks/misc/useSelectedOrganization'
 import { useConfirmOnClose } from '@/hooks/ui/useConfirmOnClose'
-import { DOCS_URL } from '@/lib/constants'
+import { DOCS_URL, IS_PLATFORM } from '@/lib/constants'
 import { useProfile } from '@/lib/profile'
 
 function parseEmails(value: string): string[] {
@@ -100,17 +100,18 @@ export const InviteMemberButton = () => {
   )
 
   const canInviteMembers =
-    hasOrgRole &&
-    rolesAddable.length > 0 &&
-    orgScopedRoles.some(({ id: role_id }) =>
-      doPermissionsCheck(
-        permissions,
-        PermissionAction.CREATE,
-        'user_invites',
-        { resource: { role_id } },
-        organization?.slug
-      )
-    )
+    !IS_PLATFORM ||
+    (hasOrgRole &&
+      rolesAddable.length > 0 &&
+      orgScopedRoles.some(({ id: role_id }) =>
+        doPermissionsCheck(
+          permissions,
+          PermissionAction.CREATE,
+          'user_invites',
+          { resource: { role_id } },
+          organization?.slug
+        )
+      ))
 
   const { mutateAsync: inviteMemberAsync, isPending: isInviting } =
     useOrganizationCreateInvitationMutation()
@@ -295,26 +296,28 @@ export const InviteMemberButton = () => {
           <DialogTitle>Invite team members</DialogTitle>
         </DialogHeader>
         <DialogSectionSeparator />
-        <Admonition
-          type="note"
-          showIcon={false}
-          title="Single Sign-On (SSO) available"
-          layout={!hasAccessToSso ? 'vertical' : 'horizontal'}
-          className="rounded-none border-t-0 border-x-0 px-5"
-          description="Enforce login via your company identity provider for added security and access control. Available on Team plan and above."
-          actions={
-            <>
-              <DocsButton href={`${DOCS_URL}/guides/platform/sso`} />
-              {!hasAccessToSso && (
-                <UpgradePlanButton
-                  plan="Team"
-                  source="inviteMemberSSO"
-                  featureProposition="enable Single Sign-on (SSO)"
-                />
-              )}
-            </>
-          }
-        />
+        {IS_PLATFORM && (
+          <Admonition
+            type="note"
+            showIcon={false}
+            title="Single Sign-On (SSO) available"
+            layout={!hasAccessToSso ? 'vertical' : 'horizontal'}
+            className="rounded-none border-t-0 border-x-0 px-5"
+            description="Enforce login via your company identity provider for added security and access control. Available on Team plan and above."
+            actions={
+              <>
+                <DocsButton href={`${DOCS_URL}/guides/platform/sso`} />
+                {!hasAccessToSso && (
+                  <UpgradePlanButton
+                    plan="Team"
+                    source="inviteMemberSSO"
+                    featureProposition="enable Single Sign-on (SSO)"
+                  />
+                )}
+              </>
+            }
+          />
+        )}
         <Form_Shadcn_ {...form}>
           <form
             id="organization-invitation"

@@ -1,17 +1,16 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 
 import apiWrapper from '@/lib/api/apiWrapper'
-import { addOrgMember, getOrgMembers } from '@/lib/api/self-hosted/membersStore'
 
 export default (req: NextApiRequest, res: NextApiResponse) => apiWrapper(req, res, handler)
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { slug } = req.query as { slug: string }
-
-  if (req.method === 'GET') {
-    return res.status(200).json(getOrgMembers(slug))
+  // Self-hosted: invitations are applied immediately as members so there are no pending
+  // invitations to delete. Return 200 for compatibility with the UI flow.
+  if (req.method === 'DELETE') {
+    return res.status(200).json({ message: 'ok' })
   }
 
-  res.setHeader('Allow', ['GET'])
+  res.setHeader('Allow', ['DELETE'])
   res.status(405).json({ data: null, error: { message: `Method ${req.method} Not Allowed` } })
 }
