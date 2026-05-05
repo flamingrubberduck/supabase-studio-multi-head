@@ -36,8 +36,12 @@ const SignInPage: NextPageWithLayout = () => {
     'dashboard_auth:custom_provider',
   ])
 
-  const showOrDivider =
-    (signInWithGithubEnabled || signInWithSsoEnabled || customProvider) && signInWithEmailEnabled
+  // In GoTrue mode always show OAuth providers (platform gates them behind feature flags)
+  const showGithub = signInWithGithubEnabled || STUDIO_AUTH_GOTRUE
+  const showSso = signInWithSsoEnabled || STUDIO_AUTH_GOTRUE
+  const showEmail = signInWithEmailEnabled || STUDIO_AUTH_GOTRUE
+
+  const showOrDivider = (showGithub || showSso || customProvider) && showEmail
 
   useEffect(() => {
     if (STUDIO_AUTH_GOTRUE) {
@@ -83,8 +87,8 @@ const SignInPage: NextPageWithLayout = () => {
     <>
       <div className="flex flex-col gap-5">
         {customProvider && <SignInWithCustom providerName={customProvider} />}
-        {signInWithGithubEnabled && <SignInWithGitHub />}
-        {signInWithSsoEnabled && (
+        {showGithub && <SignInWithGitHub />}
+        {showSso && (
           <LastSignInWrapper type="sso">
             <Button
               asChild
@@ -115,7 +119,7 @@ const SignInPage: NextPageWithLayout = () => {
             </div>
           </div>
         )}
-        {signInWithEmailEnabled && <SignInForm />}
+        {showEmail && <SignInForm />}
       </div>
 
       {signUpEnabled && (

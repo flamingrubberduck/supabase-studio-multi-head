@@ -13,7 +13,7 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import { STUDIO_AUTH_GOTRUE } from '@/lib/constants'
 import { getOrgMembers, addOrgMember } from '@/lib/api/self-hosted/membersStore'
 import { getStoredOrganizations } from '@/lib/api/self-hosted/organizationsStore'
-import { gotrueAdminCreateUser } from '@/lib/api/self-hosted/studioGoTrue'
+import { gotrueAdminCreateUser, gotrueAdminUpdateUser } from '@/lib/api/self-hosted/studioGoTrue'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -32,11 +32,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const existing = getOrgMembers(defaultOrg.slug)
+  const { email, password } = req.body ?? {}
+
   if (existing.length > 0) {
+    // Allow credential reset: if email matches an existing admin and a new password is supplied,
+    // update the GoTrue password so a locked-out admin can recover access.
+    if (email && password && String(password).length >= 8) {
+      const match = existing.find((m) => m.primary_email === String(email))
+      if (match) {
+        try {
+          await gotrueAdminUpdateUser(match.gotrue_id, { password: String(password) })
+          return res.status(200).json({ ok: true, reset: true, email: match.primary_email })
+        } catch (err: any) {
+          return res.status(400).json({ error: err.message || 'Failed to reset password' })
+        }
+      }
+    }
     return res.status(409).json({ error: 'Admin already exists. Use the sign-in page.' })
   }
 
-  const { email, password } = req.body ?? {}
   if (!email || !password) {
     return res.status(400).json({ error: 'email and password are required' })
   }
