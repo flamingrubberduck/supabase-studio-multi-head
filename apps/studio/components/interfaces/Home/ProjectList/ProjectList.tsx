@@ -219,7 +219,7 @@ export const ProjectList = ({ organization: organization_, rewriteHref }: Projec
                     label={
                       filterStatus.length === 0
                         ? `No projects found`
-                        : `No ${filterStatus[0] === 'INACTIVE' ? 'paused' : 'active'} projects found`
+                        : `No ${filterStatus[0] === 'INACTIVE' ? (IS_PLATFORM ? 'paused' : 'inactive') : 'active'} projects found`
                     }
                     description="Your search for projects with the specified status did not return any results"
                     onResetFilter={() => setFilterStatus([])}
@@ -273,7 +273,7 @@ export const ProjectList = ({ organization: organization_, rewriteHref }: Projec
           label={
             filterStatus.length === 0
               ? `No projects found`
-              : `No ${filterStatus[0] === 'INACTIVE' ? 'paused' : 'active'} projects found`
+              : `No ${filterStatus[0] === 'INACTIVE' ? (IS_PLATFORM ? 'paused' : 'inactive') : 'active'} projects found`
           }
           description="Your search for projects with the specified status did not return any results"
           onResetFilter={() => setFilterStatus([])}

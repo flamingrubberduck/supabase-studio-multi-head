@@ -23,6 +23,9 @@ async function pollOnce(): Promise<void> {
   for (const project of projects) {
     if (project.ref === 'default') continue
     if (project.status === 'COMING_UP' || project.status === 'INACTIVE') continue
+    // Embedded projects share the main stack's infrastructure — they have no dedicated
+    // Docker stack that can fail over, so skip them entirely.
+    if (project.creation_mode === 'embedded') continue
 
     if (project.role === 'replica') {
       // Monitor replica health but don't auto-promote — just mark INACTIVE so it's

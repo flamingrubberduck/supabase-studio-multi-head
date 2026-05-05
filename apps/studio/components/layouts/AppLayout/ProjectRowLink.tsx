@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Badge, cn } from 'ui'
 
 import { sanitizeRoute } from './ProjectDropdown.utils'
+import { IS_PLATFORM } from '@/lib/constants'
 
 export interface ProjectRowLinkProps {
   project: { ref: string; name: string; status?: string }
@@ -21,7 +22,7 @@ export function ProjectRowLink({
   const sanitizedRoute = sanitizeRoute(route, routerQueries)
   const href = sanitizedRoute?.replace('[ref]', project.ref) ?? `/project/${project.ref}`
   const isSelected = project.ref === selectedRef
-  const isPaused = project.status === 'INACTIVE'
+  const isInactive = project.status === 'INACTIVE'
 
   return (
     <Link
@@ -30,7 +31,9 @@ export function ProjectRowLink({
     >
       <span className={cn('truncate', isSelected ? 'md:max-w-60' : 'md:max-w-64')}>
         {project.name}
-        {isPaused && <Badge className="ml-2">Paused</Badge>}
+        {isInactive && (
+          <Badge className="ml-2">{IS_PLATFORM ? 'Paused' : 'Inactive'}</Badge>
+        )}
       </span>
       {isSelected && <Check size={16} />}
     </Link>

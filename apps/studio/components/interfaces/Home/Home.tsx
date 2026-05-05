@@ -55,7 +55,8 @@ export const Home = () => {
   } = useIsFeatureEnabled(['project_homepage:show_instance_size', 'project_homepage:show_examples'])
 
   const hasShownEnableBranchingModalRef = useRef(false)
-  const isPaused = project?.status === PROJECT_STATUS.INACTIVE
+  // In self-hosted mode INACTIVE means a Docker stack failed to launch, not a platform pause.
+  const isPaused = IS_PLATFORM && project?.status === PROJECT_STATUS.INACTIVE
   const isNewProject = dayjs(project?.inserted_at).isAfter(dayjs().subtract(2, 'day'))
   const isDefaultProject = project?.ref === 'default'
 

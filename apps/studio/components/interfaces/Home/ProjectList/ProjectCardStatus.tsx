@@ -1,4 +1,4 @@
-import { AlertTriangle, Info, PauseCircle, RefreshCcw } from 'lucide-react'
+import { AlertCircle, AlertTriangle, Info, PauseCircle, RefreshCcw } from 'lucide-react'
 import { Badge, cn, Tooltip, TooltipContent, TooltipTrigger } from 'ui'
 
 import { InferredProjectStatus } from './ProjectCard.utils'
@@ -50,6 +50,8 @@ export const ProjectCardStatus = ({
     switch (projectStatus) {
       case 'isPaused':
         return renderMode === 'badge' ? 'Paused' : 'Project is paused'
+      case 'isInactive':
+        return renderMode === 'badge' ? 'Inactive' : 'Project is inactive'
       case 'isPausing':
         return renderMode === 'badge' ? 'Pausing' : 'Project is pausing'
       case 'isRestarting':
@@ -82,6 +84,8 @@ export const ProjectCardStatus = ({
     switch (projectStatus) {
       case 'isPaused':
         return 'This project will not accept requests until resumed'
+      case 'isInactive':
+        return 'The Docker stack for this project is down or failed to launch'
       case 'isPausing':
         return 'The pause process will complete in a few minutes'
       case 'isRestarting':
@@ -109,7 +113,7 @@ export const ProjectCardStatus = ({
   const alertDescription = getDescription()
   const alertType = isCritical
     ? 'destructive'
-    : projectStatus === 'isPaused'
+    : projectStatus === 'isPaused' || projectStatus === 'isInactive'
       ? 'default'
       : 'warning'
 
@@ -175,6 +179,8 @@ export const ProjectCardStatus = ({
       >
         {['isPaused', 'isPausing'].includes(projectStatus ?? '') ? (
           <PauseCircle strokeWidth={1.5} size={14} />
+        ) : projectStatus === 'isInactive' ? (
+          <AlertCircle strokeWidth={1.5} size={14} />
         ) : ['isRestoring', 'isComingUp', 'isRestarting', 'isResizing'].includes(
             projectStatus ?? ''
           ) ? (

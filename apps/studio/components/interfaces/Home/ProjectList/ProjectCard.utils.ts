@@ -1,4 +1,4 @@
-import { PROJECT_STATUS } from '@/lib/constants'
+import { IS_PLATFORM, PROJECT_STATUS } from '@/lib/constants'
 
 export const inferProjectStatus = (projectStatus: string) => {
   let status = undefined
@@ -11,7 +11,9 @@ export const inferProjectStatus = (projectStatus: string) => {
       status = 'isPausing'
       break
     case PROJECT_STATUS.INACTIVE:
-      status = 'isPaused'
+      // Cloud: INACTIVE means paused by the platform.
+      // Self-hosted: INACTIVE means the Docker stack is down or failed to launch.
+      status = IS_PLATFORM ? 'isPaused' : 'isInactive'
       break
     case PROJECT_STATUS.PAUSE_FAILED:
       status = 'isPauseFailed'
@@ -43,6 +45,7 @@ export type InferredProjectStatus =
   | 'isHealthy'
   | 'isPausing'
   | 'isPaused'
+  | 'isInactive'
   | 'isPauseFailed'
   | 'isRestarting'
   | 'isResizing'

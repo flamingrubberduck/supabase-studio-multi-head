@@ -100,7 +100,7 @@ export const HomePageActions = ({ slug: _slug, hideNewProject = false }: HomePag
             title="Filter projects by status"
             options={[
               { key: PROJECT_STATUS.ACTIVE_HEALTHY, label: 'Active' },
-              { key: PROJECT_STATUS.INACTIVE, label: 'Paused' },
+              { key: PROJECT_STATUS.INACTIVE, label: IS_PLATFORM ? 'Paused' : 'Inactive' },
             ]}
             activeOptions={filterStatus}
             valueKey="key"
