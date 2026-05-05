@@ -21,8 +21,8 @@ import {
 import { ButtonTooltip } from '../ui/ButtonTooltip'
 import { useFeaturePreviewModal } from './App/FeaturePreview/FeaturePreviewContext'
 import { ProfileImage } from '@/components/ui/ProfileImage'
+import { useAuth } from 'common'
 import { useSignOut } from '@/lib/auth'
-import { STUDIO_AUTH_GOTRUE } from '@/lib/constants'
 import { useAppStateSnapshot } from '@/state/app-state'
 
 export const LocalDropdown = ({
@@ -37,6 +37,7 @@ export const LocalDropdown = ({
   const appStateSnapshot = useAppStateSnapshot()
   const { toggleFeaturePreviewModal } = useFeaturePreviewModal()
   const signOut = useSignOut()
+  const { session } = useAuth()
 
   return (
     <DropdownMenu>
@@ -71,7 +72,7 @@ export const LocalDropdown = ({
           <FlaskConical size={14} strokeWidth={1.5} className="text-foreground-lighter" />
           Feature previews
         </DropdownMenuItem>
-        {STUDIO_AUTH_GOTRUE && (
+        {!!session && (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem

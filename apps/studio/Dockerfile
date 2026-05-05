@@ -52,6 +52,11 @@ CMD ["pnpm", "dev:studio"]
 # Compile Next.js
 FROM dev AS builder
 
+# Multi-head always uses GoTrue-backed Studio auth.
+# NEXT_PUBLIC_* vars must be present at build time to be inlined into client bundles.
+ARG NEXT_PUBLIC_STUDIO_AUTH=gotrue
+ENV NEXT_PUBLIC_STUDIO_AUTH=${NEXT_PUBLIC_STUDIO_AUTH}
+
 RUN pnpm --filter studio exec next build
 
 # Locate the Docker Compose plugin — its path varies across docker:cli versions.

@@ -46,6 +46,10 @@ services:
       MULTI_HEAD_LICENSE_KEY: ${MULTI_HEAD_LICENSE_KEY:-}
       MULTI_HEAD_LICENSE_SERVER_URL: ${MULTI_HEAD_LICENSE_SERVER_URL:-}
       # GoTrue-backed Studio auth
+      # Tells server-side API routes that GoTrue auth mode is active
+      NEXT_PUBLIC_STUDIO_AUTH: gotrue
+      # Client-visible GoTrue URL (used by supabase-js on the browser side)
+      NEXT_PUBLIC_GOTRUE_URL: ${SUPABASE_PUBLIC_URL}/auth/v1
       # Server-side URL for GoTrue admin API calls (internal Docker hostname, not baked at build time)
       STUDIO_GOTRUE_URL: http://auth:9999
       # service_role key — allows Studio to create/delete Studio users via GoTrue admin API
