@@ -300,6 +300,134 @@ async function cmdMemberRemove(slug, gotrueId) {
   ok(data?.message ?? 'Member removed')
 }
 
+// ── oauth-urls command ────────────────────────────────────────────────────────
+
+async function cmdOauthUrls(ref) {
+  if (ref) {
+    const p = await api('GET', `/${ref}`)
+    const base = p.authUrl ?? p.public_url?.replace(/\/$/, '')
+    if (!base) die(`No auth URL found for project ${ref}`)
+    console.log(`\x1b[1m${p.name}\x1b[0m  (${p.ref})`)
+    console.log(`  Callback URL:  ${base}/callback`)
+    console.log(`  Site URL:      ${p.public_url ?? '—'}`)
+    console.log(`\nAdd this callback URL to every OAuth provider's allowed redirect list.`)
+  } else {
+    const projects = await api('GET', '')
+    if (!projects.length) { console.log('No projects.'); return }
+    printTable(
+      projects.map(p => {
+        const base = p.authUrl ?? p.public_url?.replace(/\/$/, '')
+        return { ref: p.ref, name: p.name, callback: base ? `${base}/callback` : '—' }
+      }),
+      [
+        { key: 'ref',      label: 'REF' },
+        { key: 'name',     label: 'NAME' },
+        { key: 'callback', label: 'OAUTH CALLBACK URL' },
+      ]
+    )
+    console.log('\nRegister each callback URL in your OAuth provider (Google, GitHub, etc.).')
+  }
+}
+
+// ── storage command ───────────────────────────────────────────────────────────
+
+async function cmdStorage(ref) {
+  if (ref) {
+    const p = await api('GET', `/${ref}`)
+    const base = p.public_url?.replace(/\/$/, '')
+    console.log(`\x1b[1m${p.name}\x1b[0m  (${p.ref})`)
+    console.log(`  Storage API:   ${base ? `${base}/storage/v1` : '—'}`)
+    console.log(`  Storage URL (for clients): ${base ? `${base}/storage/v1/object/public/<bucket>/<file>` : '—'}`)
+    console.log(`\nTo add a CDN, put a reverse proxy in front of the storage URL above.`)
+  } else {
+    const projects = await api('GET', '')
+    if (!projects.length) { console.log('No projects.'); return }
+    printTable(
+      projects.map(p => {
+        const base = p.public_url?.replace(/\/$/, '')
+        return { ref: p.ref, name: p.name, storage: base ? `${base}/storage/v1` : '—' }
+      }),
+      [
+        { key: 'ref',     label: 'REF' },
+        { key: 'name',    label: 'NAME' },
+        { key: 'storage', label: 'STORAGE API URL' },
+      ]
+    )
+  }
+}
+
+// ── migrations commands ───────────────────────────────────────────────────────
+
+async function cmdMigrations(ref) {
+  if (!ref) die('Usage: smh migrations <ref>')
+  const { status, data } = await plat('GET', ref, '/migrations', undefined, { allowNonOk: true })
+  if (status === 404) die(`Project not found: ${ref}`)
+  if (!String(status).startsWith('2')) die(data?.error?.message ?? JSON.stringify(data))
+  const { migrations } = data
+  if (!migrations.length) {
+    console.log(`No migrations applied on project ${ref}.`)
+    return
+  }
+  printTable(migrations, [
+    { key: 'version', label: 'VERSION' },
+    { key: 'name',    label: 'NAME', fmt: s => s ?? '—' },
+  ])
+  console.log(`\n${migrations.length} migration(s) applied.`)
+}
+
+async function cmdMigrationsCompare() {
+  const projects = await api('GET', '')
+  if (projects.length < 2) { console.log('Need at least 2 projects to compare.'); return }
+
+  // Fetch migrations for all projects in parallel
+  const results = await Promise.all(
+    projects.map(async p => {
+      try {
+        const { status, data } = await plat('GET', p.ref, '/migrations', undefined, { allowNonOk: true })
+        if (!String(status).startsWith('2')) return { ref: p.ref, name: p.name, versions: new Set(), error: true }
+        return { ref: p.ref, name: p.name, versions: new Set((data.migrations ?? []).map(m => m.version)), error: false }
+      } catch {
+        return { ref: p.ref, name: p.name, versions: new Set(), error: true }
+      }
+    })
+  )
+
+  // Union of all versions across all projects
+  const allVersions = [...new Set(results.flatMap(r => [...r.versions]))].sort()
+
+  if (!allVersions.length) {
+    console.log('No migrations found in any project.')
+    return
+  }
+
+  // Header row
+  const cols = [
+    { key: 'version', label: 'VERSION' },
+    ...results.map(r => ({ key: r.ref, label: r.name.slice(0, 16), ref: r.ref })),
+  ]
+
+  const rows = allVersions.map(v => {
+    const row = { version: v }
+    for (const r of results) {
+      row[r.ref] = r.error ? '\x1b[33m?\x1b[0m' : r.versions.has(v) ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'
+    }
+    return row
+  })
+
+  printTable(rows, cols)
+
+  // Summarize divergence
+  const diverged = allVersions.filter(v =>
+    results.some(r => !r.error && r.versions.has(v)) &&
+    results.some(r => !r.error && !r.versions.has(v))
+  )
+  if (diverged.length) {
+    console.log(`\n\x1b[33mWarning:\x1b[0m ${diverged.length} migration(s) not applied on all projects.`)
+  } else {
+    console.log(`\n\x1b[32m✓\x1b[0m All projects are in sync (${allVersions.length} migration(s)).`)
+  }
+}
+
 // ── replica commands ──────────────────────────────────────────────────────────
 
 async function cmdReplicaAdd(ref, dockerHost) {
@@ -424,6 +552,12 @@ function usage() {
 
   Roles: owner | administrator | developer | readonly
 
+\x1b[1mSetup helpers:\x1b[0m
+  smh oauth-urls [ref]                 print GoTrue callback URLs to register with OAuth providers
+  smh storage    [ref]                 print storage API URLs per project
+  smh migrations <ref>                 list applied migrations on a project
+  smh migrations compare               show migration state across all projects
+
 \x1b[1mCluster (read replicas):\x1b[0m
   smh replica add    <ref> [--host H]  provision a read replica  [Business]
   smh replica remove <ref> <replica>   remove a read replica
@@ -461,6 +595,13 @@ switch (cmd) {
   case 'health':           await cmdHealth(sub);           break
   case 'failover':         await cmdFailover(sub);         break
   case 'cluster-failover': await cmdClusterFailover(sub);  break
+  case 'oauth-urls':       await cmdOauthUrls(sub);        break
+  case 'storage':          await cmdStorage(sub);          break
+
+  case 'migrations':
+    if (!sub || sub === 'compare') await cmdMigrationsCompare()
+    else                           await cmdMigrations(sub)
+    break
 
   case 'org':
     if (sub === 'list')        await cmdOrgList()

@@ -46,6 +46,8 @@ const applyAndTrackMigrationsQuery = (query: string, name?: string) => {
 
 export type ListMigrationVersionsOptions = {
   headers?: HeadersInit
+  /** Project ref — when provided, queries that project's DB instead of the default. */
+  ref?: string
 }
 
 /**
@@ -55,12 +57,14 @@ export type ListMigrationVersionsOptions = {
  */
 export async function listMigrationVersions({
   headers,
+  ref,
 }: ListMigrationVersionsOptions): Promise<WrappedResult<ListMigrationsResult[]>> {
   assertSelfHosted()
 
   const { data, error } = await executeQuery<ListMigrationsResult>({
     query: listMigrationVersionsQuery(),
     headers,
+    ref,
   })
 
   if (error) {

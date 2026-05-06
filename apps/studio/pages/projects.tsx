@@ -26,7 +26,15 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  Tabs as Tabs_Shadcn_,
+  TabsContent as TabsContent_Shadcn_,
+  TabsList as TabsList_Shadcn_,
+  TabsTrigger as TabsTrigger_Shadcn_,
 } from 'ui'
+
+import { MigrationsPanel } from '@/components/interfaces/SelfHosted/MigrationsPanel'
+import { OAuthSetupPanel } from '@/components/interfaces/SelfHosted/OAuthSetupPanel'
+import { StoragePanel } from '@/components/interfaces/SelfHosted/StoragePanel'
 
 import { AppLayout } from '@/components/layouts/AppLayout/AppLayout'
 import { DefaultLayout } from '@/components/layouts/DefaultLayout'
@@ -65,8 +73,11 @@ function statusBadgeVariant(
   }
 }
 
+type Tab = 'projects' | 'oauth' | 'storage' | 'migrations'
+
 const ProjectsPage: NextPageWithLayout = () => {
   const router = useRouter()
+  const [activeTab, setActiveTab] = useState<Tab>('projects')
   const [confirmDeleteProject, setConfirmDeleteProject] = useState<SelfHostedProject | null>(null)
   const [confirmDeleteOrg, setConfirmDeleteOrg] = useState(false)
 
@@ -136,6 +147,35 @@ const ProjectsPage: NextPageWithLayout = () => {
 
       <ScaffoldContainer>
         <ScaffoldSection isFullWidth className="flex flex-col gap-y-4">
+          <Tabs_Shadcn_
+            value={activeTab}
+            onValueChange={(v) => setActiveTab(v as Tab)}
+            className="w-full"
+          >
+            <TabsList_Shadcn_ className="mb-2">
+              <TabsTrigger_Shadcn_ value="projects">Projects</TabsTrigger_Shadcn_>
+              <TabsTrigger_Shadcn_ value="oauth">OAuth Setup</TabsTrigger_Shadcn_>
+              <TabsTrigger_Shadcn_ value="storage">Storage</TabsTrigger_Shadcn_>
+              <TabsTrigger_Shadcn_ value="migrations">Migrations</TabsTrigger_Shadcn_>
+            </TabsList_Shadcn_>
+
+            {/* ── OAuth tab ──────────────────────────────────────────── */}
+            <TabsContent_Shadcn_ value="oauth">
+              <OAuthSetupPanel projects={projects} />
+            </TabsContent_Shadcn_>
+
+            {/* ── Storage tab ────────────────────────────────────────── */}
+            <TabsContent_Shadcn_ value="storage">
+              <StoragePanel projects={projects} />
+            </TabsContent_Shadcn_>
+
+            {/* ── Migrations tab ─────────────────────────────────────── */}
+            <TabsContent_Shadcn_ value="migrations">
+              <MigrationsPanel projects={projects} />
+            </TabsContent_Shadcn_>
+
+            {/* ── Projects tab ───────────────────────────────────────── */}
+            <TabsContent_Shadcn_ value="projects">
           {/* Org selector + actions */}
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
@@ -296,6 +336,8 @@ const ProjectsPage: NextPageWithLayout = () => {
               </TableBody>
             </Table>
           </div>
+            </TabsContent_Shadcn_>
+          </Tabs_Shadcn_>
         </ScaffoldSection>
       </ScaffoldContainer>
 

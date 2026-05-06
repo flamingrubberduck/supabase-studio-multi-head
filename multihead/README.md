@@ -236,6 +236,35 @@ Available roles: `owner`, `administrator`, `developer`, `readonly`
 
 In GoTrue auth mode (`NEXT_PUBLIC_STUDIO_AUTH=gotrue`) a `--password` is required when adding members. In the default mode a password is optional.
 
+### Setup helpers
+
+Three commands that make the common self-hosted friction points more visible.
+
+**OAuth provider redirect URIs** — every OAuth provider (Google, GitHub, etc.) requires an explicit list of allowed callback URLs. With multiple projects each running its own GoTrue on a different port, it's easy to miss one.
+
+```bash
+smh oauth-urls          # print callback URL for every project
+smh oauth-urls <ref>    # print callback URL for a single project
+```
+
+Output shows the exact URL (`<public_url>/auth/v1/callback`) to paste into each provider's redirect URI list.
+
+**Storage API endpoints** — each project has its own Storage service. Use this when configuring a CDN or debugging file upload issues.
+
+```bash
+smh storage             # print storage API URL for every project
+smh storage <ref>       # print storage API URL for a single project
+```
+
+**Migration state** — each project has its own `supabase_migrations.schema_migrations` table. Use this to catch divergence before it becomes a problem.
+
+```bash
+smh migrations <ref>         # list applied migrations on a project
+smh migrations compare       # matrix view: which migrations are applied across all projects
+```
+
+`migrations compare` marks each migration ✓ (applied), ✗ (missing), or ? (unreachable) per project and warns when any version is missing from at least one project.
+
 ### License
 
 ```bash
@@ -424,6 +453,7 @@ All endpoints require HTTP Basic auth (`DASHBOARD_USERNAME` / `DASHBOARD_PASSWOR
 | `GET` | `/api/platform/projects/:ref` | Get project details |
 | `PATCH` | `/api/platform/projects/:ref` | Rename a project `{"name":"…"}` |
 | `DELETE` | `/api/platform/projects/:ref` | Delete a project |
+| `GET` | `/api/platform/projects/:ref/migrations` | List applied migrations on a project |
 | `POST` | `/api/platform/projects/import` | Register an external stack |
 
 ### Organizations
