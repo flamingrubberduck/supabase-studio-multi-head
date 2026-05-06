@@ -26,10 +26,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  Tabs as Tabs_Shadcn_,
-  TabsContent as TabsContent_Shadcn_,
-  TabsList as TabsList_Shadcn_,
-  TabsTrigger as TabsTrigger_Shadcn_,
+  Tabs_Shadcn_,
+  TabsContent_Shadcn_,
+  TabsList_Shadcn_,
+  TabsTrigger_Shadcn_,
 } from 'ui'
 
 import { MigrationsPanel } from '@/components/interfaces/SelfHosted/MigrationsPanel'
