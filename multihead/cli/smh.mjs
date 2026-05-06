@@ -7,11 +7,20 @@
  * Usage:
  *   smh list
  *   smh create <name>
+ *   smh rename <ref> <name>
  *   smh delete <ref>
  *   smh start  <ref>
  *   smh stop   <ref>
  *   smh status <ref>
  *   smh health [ref]
+ *
+ *   smh org list
+ *   smh org create <name>
+ *   smh org rename <slug> <name>
+ *
+ *   smh member list   <org-slug>
+ *   smh member add    <org-slug> <email> --role <role> [--password <pw>]
+ *   smh member remove <org-slug> <gotrue_id>
  *
  *   smh replica add    <ref> [--host <docker_host>]
  *   smh replica remove <ref> <replica_ref>
@@ -27,14 +36,17 @@
  *   smh license deactivate
  *
  * Environment:
- *   STUDIO_URL   Base URL of Studio (default: http://localhost:8082)
+ *   STUDIO_URL          Base URL of Studio (default: http://localhost:8000)
+ *   DASHBOARD_USERNAME  Basic auth username
+ *   DASHBOARD_PASSWORD  Basic auth password
  */
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-const BASE    = (process.env.STUDIO_URL ?? 'http://localhost:8082').replace(/\/$/, '')
+const BASE    = (process.env.STUDIO_URL ?? 'http://localhost:8000').replace(/\/$/, '')
 const PLAT    = `${BASE}/api/platform/projects`
-const API     = PLAT  // self-hosted projects live at the platform endpoint
+const API     = PLAT
+const ORG_API = `${BASE}/api/platform/organizations`
 const LIC_API = `${BASE}/api/platform/license`
 
 function basicAuthHeader() {
@@ -70,6 +82,8 @@ const api  = (m, path, body, opts) =>
   request(m, `${API}${path}`, body, opts).then(r => r.data)
 const plat = (m, ref, sub, body, opts) =>
   request(m, `${PLAT}/${ref}${sub}`, body, opts)
+const orgReq = (m, path, body, opts) =>
+  request(m, `${ORG_API}${path}`, body, opts)
 
 function die(msg) {
   console.error(`\x1b[31merror:\x1b[0m ${msg}`)
@@ -78,6 +92,11 @@ function die(msg) {
 
 function ok(msg) {
   console.log(`\x1b[32m✓\x1b[0m ${msg}`)
+}
+
+function parseFlag(args, flag) {
+  const idx = args.indexOf(flag)
+  return idx >= 0 ? args[idx + 1] : undefined
 }
 
 // ── formatters ───────────────────────────────────────────────────────────────
@@ -145,6 +164,13 @@ async function cmdCreate(name) {
   console.log(`  Anon key:  ${p.anonKey}`)
 }
 
+async function cmdRename(ref, name) {
+  if (!ref || !name) die('Usage: smh rename <ref> <name>')
+  const { status, data } = await plat('PATCH', ref, '', { name }, { allowNonOk: true })
+  if (!String(status).startsWith('2')) die(data?.error?.message ?? data?.message ?? JSON.stringify(data))
+  ok(`Renamed project ${ref} → "${data.name}"`)
+}
+
 async function cmdDelete(ref) {
   if (!ref) die('Usage: smh delete <ref>')
   const { message } = await api('DELETE', `/${ref}`)
@@ -205,6 +231,73 @@ async function cmdHealth(ref) {
       { key: 'auth',    label: 'AUTH', fmt: colorHealth },
     ])
   }
+}
+
+// ── org commands ──────────────────────────────────────────────────────────────
+
+async function cmdOrgList() {
+  const { status, data } = await orgReq('GET', '', undefined, { allowNonOk: true })
+  if (!String(status).startsWith('2')) die(data?.error?.message ?? data?.message ?? JSON.stringify(data))
+  const orgs = data
+  if (!orgs.length) { console.log('No organizations.'); return }
+  printTable(orgs, [
+    { key: 'slug', label: 'SLUG' },
+    { key: 'name', label: 'NAME' },
+  ])
+}
+
+async function cmdOrgCreate(name) {
+  if (!name) die('Usage: smh org create <name>')
+  const { status, data } = await orgReq('POST', '', { name }, { allowNonOk: true })
+  if (!String(status).startsWith('2')) die(data?.error?.message ?? data?.message ?? JSON.stringify(data))
+  ok(`Created organization  slug=${data.slug}  name="${data.name}"`)
+}
+
+async function cmdOrgRename(slug, name) {
+  if (!slug || !name) die('Usage: smh org rename <slug> <name>')
+  const { status, data } = await orgReq('PATCH', `/${slug}`, { name }, { allowNonOk: true })
+  if (!String(status).startsWith('2')) die(data?.error?.message ?? data?.message ?? JSON.stringify(data))
+  ok(`Renamed organization ${slug} → "${data.name}"`)
+}
+
+// ── member commands ───────────────────────────────────────────────────────────
+
+const ROLE_NAMES = { owner: 1, administrator: 2, developer: 3, readonly: 4 }
+
+async function cmdMemberList(slug) {
+  if (!slug) die('Usage: smh member list <org-slug>')
+  const { status, data } = await orgReq('GET', `/${slug}/members`, undefined, { allowNonOk: true })
+  if (!String(status).startsWith('2')) die(data?.error?.message ?? data?.message ?? JSON.stringify(data))
+  const members = data
+  if (!members.length) { console.log('No members.'); return }
+  const ROLE_LABEL = { 1: 'Owner', 2: 'Administrator', 3: 'Developer', 4: 'Read-only' }
+  printTable(members, [
+    { key: 'gotrue_id',     label: 'ID' },
+    { key: 'primary_email', label: 'EMAIL' },
+    { key: 'role_ids',      label: 'ROLE', fmt: ids => {
+      const base = ids?.find(id => id < 1000) ?? ids?.[0]
+      return ROLE_LABEL[base] ?? String(base)
+    }},
+  ])
+}
+
+async function cmdMemberAdd(slug, email, args) {
+  if (!slug || !email) die('Usage: smh member add <org-slug> <email> --role <role> [--password <pw>]')
+  const roleName = parseFlag(args, '--role')?.toLowerCase().replace('-', '')
+  const password = parseFlag(args, '--password')
+  const role_id = ROLE_NAMES[roleName]
+  if (!role_id) die(`--role must be one of: owner, administrator, developer, readonly`)
+  const body = { email, role_id, ...(password && { password }) }
+  const { status, data } = await orgReq('POST', `/${slug}/members/invitations`, body, { allowNonOk: true })
+  if (!String(status).startsWith('2')) die(data?.error?.message ?? data?.message ?? JSON.stringify(data))
+  ok(`Added member  id=${data.gotrue_id}  email=${data.primary_email}`)
+}
+
+async function cmdMemberRemove(slug, gotrueId) {
+  if (!slug || !gotrueId) die('Usage: smh member remove <org-slug> <gotrue_id>')
+  const { status, data } = await orgReq('DELETE', `/${slug}/members/${gotrueId}`, undefined, { allowNonOk: true })
+  if (!String(status).startsWith('2')) die(data?.error?.message ?? data?.message ?? JSON.stringify(data))
+  ok(data?.message ?? 'Member removed')
 }
 
 // ── replica commands ──────────────────────────────────────────────────────────
@@ -293,14 +386,14 @@ async function cmdLicenseActivate(key) {
   if (!key) die('Usage: smh license activate <key>')
   const { status, data } = await request('PATCH', LIC_API, { key }, { allowNonOk: true })
   if (!String(status).startsWith('2')) die(data?.error?.message ?? data?.message ?? JSON.stringify(data))
-  ok(`License activated — ${data.tier ?? 'business'} tier`)
+  ok(`License activated — ${data.tier} tier`)
   if (data.email) console.log(`  Email: ${data.email}`)
 }
 
 async function cmdLicenseDeactivate() {
   const { status, data } = await request('DELETE', LIC_API, undefined, { allowNonOk: true })
   if (!String(status).startsWith('2')) die(data?.error?.message ?? data?.message ?? JSON.stringify(data))
-  ok('License deactivated — running as Free tier')
+  ok('License deactivated — running as free tier')
 }
 
 // ── usage ─────────────────────────────────────────────────────────────────────
@@ -312,29 +405,44 @@ function usage() {
 \x1b[1mProject management:\x1b[0m
   smh list                             list all projects
   smh create <name>                    create a new project
+  smh rename <ref> <name>              rename a project
   smh delete <ref>                     delete a project and its containers
   smh start  <ref>                     start a stopped project
   smh stop   <ref>                     stop a running project
   smh status <ref>                     show registry details for a project
   smh health [ref]                     show live container health
 
+\x1b[1mOrganization management:\x1b[0m
+  smh org list                         list all organizations
+  smh org create <name>                create a new organization
+  smh org rename <slug> <name>         rename an organization
+
+\x1b[1mMember management:\x1b[0m
+  smh member list   <org-slug>         list members of an organization
+  smh member add    <org-slug> <email> --role <role> [--password <pw>]
+  smh member remove <org-slug> <id>    remove a member
+
+  Roles: owner | administrator | developer | readonly
+
 \x1b[1mCluster (read replicas):\x1b[0m
-  smh replica add    <ref> [--host H]  provision a read replica  [Pro]
+  smh replica add    <ref> [--host H]  provision a read replica  [Business]
   smh replica remove <ref> <replica>   remove a read replica
 
 \x1b[1mFailover (warm standby):\x1b[0m
-  smh standby add    <ref> [--host H]  provision a warm standby  [Pro]
+  smh standby add    <ref> [--host H]  provision a warm standby  [Business]
   smh standby remove <ref>             remove the standby
-  smh failover         <ref>           trigger primary → standby failover  [Pro]
-  smh cluster-failover <ref>           promote highest-rank healthy replica [Pro]
+  smh failover         <ref>           trigger primary → standby failover  [Business]
+  smh cluster-failover <ref>           promote highest-rank healthy replica [Enterprise]
 
 \x1b[1mLicense:\x1b[0m
   smh license status                   show current license tier
-  smh license activate <key>           activate a Pro license key
-  smh license deactivate               revert to Free tier
+  smh license activate <key>           activate a license key
+  smh license deactivate               revert to free tier
 
 \x1b[1mEnvironment:\x1b[0m
-  STUDIO_URL   Studio base URL  (default: http://localhost:8082)
+  STUDIO_URL          Studio base URL  (default: http://localhost:8000)
+  DASHBOARD_USERNAME  Basic auth username
+  DASHBOARD_PASSWORD  Basic auth password
 `.trim())
 }
 
@@ -342,14 +450,10 @@ function usage() {
 
 const [,, cmd, sub, ...rest] = process.argv
 
-function parseHost(args) {
-  const idx = args.indexOf('--host')
-  return idx >= 0 ? args[idx + 1] : undefined
-}
-
 switch (cmd) {
   case 'list':             await cmdList();                break
   case 'create':           await cmdCreate(sub);           break
+  case 'rename':           await cmdRename(sub, rest[0]);  break
   case 'delete':           await cmdDelete(sub);           break
   case 'start':            await cmdStart(sub);            break
   case 'stop':             await cmdStop(sub);             break
@@ -358,14 +462,28 @@ switch (cmd) {
   case 'failover':         await cmdFailover(sub);         break
   case 'cluster-failover': await cmdClusterFailover(sub);  break
 
+  case 'org':
+    if (sub === 'list')        await cmdOrgList()
+    else if (sub === 'create') await cmdOrgCreate(rest[0])
+    else if (sub === 'rename') await cmdOrgRename(rest[0], rest[1])
+    else { console.error(`Unknown org sub-command: ${sub}`); usage(); process.exit(1) }
+    break
+
+  case 'member':
+    if (sub === 'list')        await cmdMemberList(rest[0])
+    else if (sub === 'add')    await cmdMemberAdd(rest[0], rest[1], rest.slice(2))
+    else if (sub === 'remove') await cmdMemberRemove(rest[0], rest[1])
+    else { console.error(`Unknown member sub-command: ${sub}`); usage(); process.exit(1) }
+    break
+
   case 'replica':
-    if (sub === 'add')         await cmdReplicaAdd(rest[0], parseHost(rest.slice(1)))
+    if (sub === 'add')         await cmdReplicaAdd(rest[0], parseFlag(rest.slice(1), '--host'))
     else if (sub === 'remove') await cmdReplicaRemove(rest[0], rest[1])
     else { console.error(`Unknown replica sub-command: ${sub}`); usage(); process.exit(1) }
     break
 
   case 'standby':
-    if (sub === 'add')         await cmdStandbyAdd(rest[0], parseHost(rest.slice(1)))
+    if (sub === 'add')         await cmdStandbyAdd(rest[0], parseFlag(rest.slice(1), '--host'))
     else if (sub === 'remove') await cmdStandbyRemove(rest[0])
     else { console.error(`Unknown standby sub-command: ${sub}`); usage(); process.exit(1) }
     break

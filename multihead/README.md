@@ -2,7 +2,7 @@
 
 A self-hosted Supabase Dashboard that lets you **create and manage multiple isolated Supabase projects** from a single UI — no Supabase Cloud account required.
 
-**Pro tier** unlocks high-availability features: read replicas, hot standbys, automatic failover, and cluster mode.
+**Business and Enterprise tiers** unlock high-availability features: read replicas, hot standbys, automatic failover, and cluster mode.
 
 ---
 
@@ -26,7 +26,7 @@ multihead/
 ├── integrate.sh                # Existing-install: drop multi-head onto a running stack
 ├── build-push.sh               # Build the Studio image and push to GHCR
 ├── cli/
-│   └── smh.mjs                 # smh CLI — manage projects, replicas, standbys, failover, license
+│   └── smh.mjs                 # smh CLI — manage projects, orgs, members, replicas, failover, license
 ├── tests/
 │   └── test-cluster-failover.mjs  # E2E test suite (cluster / failover / replication)
 └── utils/
@@ -184,7 +184,7 @@ The project appears in the Studio dashboard immediately with **ACTIVE_HEALTHY** 
 
 ## smh CLI
 
-`smh` is a Node.js CLI for managing multi-head projects, replicas, standbys, failover, and licenses from the terminal.
+`smh` is a Node.js CLI for managing multi-head projects, organizations, members, replicas, standbys, failover, and licenses from the terminal.
 
 ```bash
 # Install (from the repo root or multihead/ directory)
@@ -198,7 +198,7 @@ ln -s $(pwd)/multihead/cli/smh.mjs /usr/local/bin/smh
 ### Environment
 
 ```bash
-export STUDIO_URL=http://localhost:8000          # Studio base URL (default: http://localhost:8082)
+export STUDIO_URL=http://localhost:8000          # Studio base URL (default: http://localhost:8000)
 export DASHBOARD_USERNAME=supabase               # Basic auth username
 export DASHBOARD_PASSWORD=your-dashboard-password
 ```
@@ -208,6 +208,7 @@ export DASHBOARD_PASSWORD=your-dashboard-password
 ```bash
 smh list                    # list all projects
 smh create <name>           # create a new project (spawns a Docker stack)
+smh rename <ref> <name>     # rename a project
 smh delete <ref>            # delete a project and its containers
 smh start  <ref>            # start a stopped project
 smh stop   <ref>            # stop a running project
@@ -215,35 +216,95 @@ smh status <ref>            # show registry details for a project
 smh health [ref]            # show live container health
 ```
 
-### License (Pro)
+### Organization management
 
 ```bash
-smh license status              # show current tier (free / pro) and grace period state
-smh license activate <key>      # activate a Pro license key
-smh license deactivate          # revert to Free tier
+smh org list                      # list all organizations
+smh org create <name>             # create a new organization
+smh org rename <slug> <name>      # rename an organization
 ```
 
-### High availability (Pro tier only)
+### Member management
 
 ```bash
-# Read replicas — streaming replicas in a cluster
+smh member list   <org-slug>                                      # list org members
+smh member add    <org-slug> <email> --role <role> [--password <pw>]  # add a member
+smh member remove <org-slug> <gotrue_id>                          # remove a member
+```
+
+Available roles: `owner`, `administrator`, `developer`, `readonly`
+
+In GoTrue auth mode (`NEXT_PUBLIC_STUDIO_AUTH=gotrue`) a `--password` is required when adding members. In the default mode a password is optional.
+
+### License
+
+```bash
+smh license status              # show current tier (free / business / enterprise) and grace state
+smh license activate <key>      # activate a license key
+smh license deactivate          # revert to free tier
+```
+
+### High availability (Business/Enterprise tier only)
+
+```bash
+# Read replicas — streaming replicas in a cluster  [Enterprise]
 smh replica add    <ref> [--host <docker_host>]   # provision a read replica
 smh replica remove <ref> <replica_ref>             # deprovision a replica
 
-# Hot standby — automatic failover target
+# Hot standby — automatic failover target  [Business]
 smh standby add    <ref> [--host <docker_host>]   # provision a hot standby
 smh standby remove <ref>                           # remove the standby
 
 # Manual failover
-smh failover         <ref>   # promote standby to primary
-smh cluster-failover <ref>   # promote highest-rank healthy replica to master
+smh failover         <ref>   # promote standby to primary  [Business]
+smh cluster-failover <ref>   # promote highest-rank healthy replica to master  [Enterprise]
 ```
 
 ---
 
-## High availability features (Pro)
+## GoTrue auth (Studio login)
 
-Pro tier unlocks three HA mechanisms that work independently or together.
+By default Studio runs without user authentication (bypassed for self-hosted). To enable real login via the stack's GoTrue service, set:
+
+```dotenv
+NEXT_PUBLIC_STUDIO_AUTH=gotrue
+STUDIO_GOTRUE_SERVICE_KEY=<service_role_jwt>
+```
+
+On first start, Studio redirects to **/setup** where you create the initial Owner account. After that, the sign-in page requires credentials.
+
+### Roles
+
+| Role | Capabilities |
+|------|-------------|
+| **Owner** | Full access to all resources, members, and org settings |
+| **Administrator** | Manage project settings and team members |
+| **Developer** | Read/write access to project data; cannot manage members or org |
+| **Read-only** | Read access to project data only |
+
+Roles can be scoped to specific projects — a member can be Developer on one project and Read-only on another within the same organization.
+
+### Bootstrap API
+
+```bash
+# One-time endpoint to create the first Owner (only callable when no members exist)
+curl -s -X POST http://localhost:8000/api/self-hosted/bootstrap \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@example.com","password":"changeme"}'
+```
+
+---
+
+## High availability features (Business/Enterprise)
+
+Business and Enterprise tiers unlock three HA mechanisms that work independently or together.
+
+| Feature | Minimum tier |
+|---------|-------------|
+| Multiple projects | Business |
+| Hot standby + failover | Business |
+| Read replicas + auto-failover | Business |
+| Cluster mode + cluster-failover | Enterprise |
 
 ### License activation
 
@@ -256,7 +317,7 @@ curl -s -u supabase:<password> -X PATCH http://localhost:8000/api/platform/licen
   -H 'Content-Type: application/json' -d '{"key":"<your-key>"}'
 ```
 
-A **7-day grace period** keeps the Pro tier active if the license server is temporarily unreachable. After grace expires the instance reverts to Free.
+A **7-day grace period** keeps the paid tier active if the license server is temporarily unreachable. After grace expires the instance reverts to free.
 
 ### Read replicas (cluster mode)
 
@@ -335,6 +396,8 @@ Generate all at once: `bash utils/generate-keys.sh`
 | `MULTI_HEAD_HOST` | `host.docker.internal` | Hostname at which extra project stacks are reachable from inside the Studio container |
 | `STUDIO_DATA_DIR` | `./volumes/studio-data` | Host path for `projects.json` project registry |
 | `MULTI_HEAD_LICENSE_SECRET` | *(unset)* | HMAC secret used to verify license key signatures |
+| `NEXT_PUBLIC_STUDIO_AUTH` | *(unset)* | Set to `gotrue` to enable GoTrue-backed Studio login |
+| `STUDIO_GOTRUE_SERVICE_KEY` | *(unset)* | Service role JWT for GoTrue admin API (required in GoTrue mode) |
 
 ### Port allocation for new projects
 
@@ -359,10 +422,37 @@ All endpoints require HTTP Basic auth (`DASHBOARD_USERNAME` / `DASHBOARD_PASSWOR
 | `GET` | `/api/platform/projects` | List all projects |
 | `POST` | `/api/platform/projects` | Create a project |
 | `GET` | `/api/platform/projects/:ref` | Get project details |
+| `PATCH` | `/api/platform/projects/:ref` | Rename a project `{"name":"…"}` |
 | `DELETE` | `/api/platform/projects/:ref` | Delete a project |
 | `POST` | `/api/platform/projects/import` | Register an external stack |
 
-### High availability (Pro)
+### Organizations
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/platform/organizations` | List all organizations |
+| `POST` | `/api/platform/organizations` | Create an organization |
+| `GET` | `/api/platform/organizations/:slug` | Get organization details |
+| `PATCH` | `/api/platform/organizations/:slug` | Rename org `{"name":"…"}` |
+| `DELETE` | `/api/platform/organizations/:slug` | Delete an organization (must have no projects) |
+
+### Members & roles
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/platform/organizations/:slug/members` | List org members |
+| `GET` | `/api/platform/organizations/:slug/members/invitations` | List pending invitations (always empty in self-hosted) |
+| `POST` | `/api/platform/organizations/:slug/members/invitations` | Add a member `{"email","role_id"[,"password"]}` |
+| `PATCH` | `/api/platform/organizations/:slug/members/:id` | Assign a role `{"role_id"[,"role_scoped_projects":[]]}` |
+| `DELETE` | `/api/platform/organizations/:slug/members/:id` | Remove a member |
+| `GET` | `/api/platform/organizations/:slug/roles` | List available roles |
+| `PUT` | `/api/platform/organizations/:slug/members/:id/roles/:role_id` | Update project-scoped role refs |
+| `DELETE` | `/api/platform/organizations/:slug/members/:id/roles/:role_id` | Remove a specific role from a member |
+| `GET` | `/api/platform/profile/permissions` | Get RBAC permissions for the current user |
+
+Role IDs: `1` = Owner, `2` = Administrator, `3` = Developer, `4` = Read-only
+
+### High availability (Business/Enterprise)
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -379,7 +469,7 @@ All endpoints require HTTP Basic auth (`DASHBOARD_USERNAME` / `DASHBOARD_PASSWOR
 |--------|------|-------------|
 | `GET` | `/api/platform/license` | Get current tier and grace state |
 | `PATCH` | `/api/platform/license` | Activate a license key `{"key":"<jwt>"}` |
-| `DELETE` | `/api/platform/license` | Deactivate — revert to Free tier |
+| `DELETE` | `/api/platform/license` | Deactivate — revert to free tier |
 
 ---
 
@@ -424,7 +514,7 @@ node multihead/tests/test-cluster-failover.mjs
 # Run against a different URL
 STUDIO_URL=http://myhost:8000 node multihead/tests/test-cluster-failover.mjs
 
-# Enable Pro flow (requires a valid license key)
+# Enable Business/Enterprise flow (requires a valid license key)
 SMH_LICENSE_KEY=<your-key> node multihead/tests/test-cluster-failover.mjs
 ```
 
@@ -435,12 +525,12 @@ Credentials are auto-read from `docker/.env`. Set `DASHBOARD_USERNAME` / `DASHBO
 | Group | What's tested |
 |-------|--------------|
 | License API | GET/PATCH/DELETE `/api/platform/license` |
-| License gating | Pro-required endpoints return 402 on Free tier |
+| License gating | Business/Enterprise-required endpoints return 402 on free tier |
 | Replica API contract | Validation, missing params, method guards |
 | Standby API contract | Same checks for standby endpoints |
 | Failover API contract | POST /failover and /cluster-failover guards |
 | smh CLI basic | `list`, `license status/activate/deactivate`, `help` |
-| Pro flow *(optional)* | Full create → replica → standby → failover → cleanup cycle |
+| Business/Enterprise flow *(optional)* | Full create → replica → standby → failover → cleanup cycle |
 
 ---
 
@@ -471,7 +561,7 @@ multihead/docker-compose.yml  (or overlay on existing stack)
 │
 ├─ studio (multi-head image)
 │    ├─ mounts /var/run/docker.sock   → spawns new project stacks via Docker CLI
-│    ├─ reads  /app/studio-data       → project registry (projects.json)
+│    ├─ reads  /app/studio-data       → project registry (projects.json, members.json)
 │    ├─ uses   /app/supabase-docker/  → compose template baked into image
 │    └─ health poller                 → polls projects every 30 s, triggers failover
 │
@@ -493,6 +583,7 @@ multihead/docker-compose.yml  (or overlay on existing stack)
 - **Token continuity**: Standbys and replicas inherit the primary's JWT/anon/service keys so existing client tokens remain valid after failover.
 - **Import without restart**: The `/api/platform/projects/import` endpoint registers external stacks live — no container restart needed.
 - **Offline-friendly licensing**: License keys are signed JWTs verified with a local HMAC secret. No internet connection required after the key is stored.
+- **GoTrue auth**: When `NEXT_PUBLIC_STUDIO_AUTH=gotrue`, Studio login is backed by the stack's own GoTrue service. Members are stored in `members.json` linked by GoTrue user ID.
 
 ---
 
@@ -506,5 +597,6 @@ multihead/docker-compose.yml  (or overlay on existing stack)
 | Port conflict on new project | Edit `volumes/studio-data/projects.json`, change `kong_http_port`, restart Studio |
 | Reset everything | `docker compose down -v && rm -f volumes/studio-data/projects.json` |
 | API returns 401 | Pass Basic auth: `curl -u supabase:<password> …` or set `DASHBOARD_USERNAME`/`DASHBOARD_PASSWORD` |
-| Failover not triggering | Check `MULTI_HEAD_LICENSE_SECRET` is set and license is Pro tier (`smh license status`) |
+| Failover not triggering | Check `MULTI_HEAD_LICENSE_SECRET` is set and license is Business/Enterprise (`smh license status`) |
 | Replica stuck in COMING_UP | Check Docker logs for `pg_basebackup` errors; verify Postgres is reachable on `postgres_port` |
+| GoTrue login fails | Verify `STUDIO_GOTRUE_SERVICE_KEY` is the service role JWT; check `/setup` page for first-run bootstrap |
