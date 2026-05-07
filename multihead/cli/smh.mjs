@@ -31,6 +31,13 @@
  *   smh failover         <ref>   # primary → standby
  *   smh cluster-failover <ref>   # cluster master → highest-rank healthy replica
  *
+ *   smh backup list <ref>
+ *   smh backup run <ref>
+ *   smh backup schedule <ref> daily|weekly|off
+ *   smh backup restore <ref> <filename> --confirm
+ *   smh backup delete <ref> <filename>
+ *   smh backup download <ref> <filename> [--out <path>]
+ *
  *   smh migrate <ref> --source <db-url> [--schemas <s1,s2>] [--schema-only]
  *   smh migrate resume <ref> <job-id>
  *
@@ -616,6 +623,133 @@ async function pollMigrationJob(ref, jobId) {
   }
 }
 
+// ── backup command ────────────────────────────────────────────────────────────
+
+const BACKUP_API = `${BASE}/api/self-hosted/backups`
+
+function formatBytes(n) {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function fmtDate(iso) {
+  return new Date(iso).toLocaleString()
+}
+
+async function backupReq(method, qs, body) {
+  const url = `${BACKUP_API}${qs ?? ''}`
+  const headers = { 'Content-Type': 'application/json' }
+  const auth = basicAuthHeader()
+  if (auth) headers['Authorization'] = auth
+  const opts = { method, headers }
+  if (body !== undefined) opts.body = JSON.stringify(body)
+  let res
+  try { res = await fetch(url, opts) }
+  catch (err) { die(`Cannot reach Studio at ${BASE} — is it running?\n  ${err.message}`) }
+  const text = await res.text()
+  let data; try { data = JSON.parse(text) } catch { data = text }
+  if (!res.ok) die(`HTTP ${res.status}: ${data?.error ?? JSON.stringify(data)}`)
+  return data
+}
+
+async function cmdBackup(sub, args) {
+  if (sub === 'list') {
+    const ref = args[0]
+    if (!ref) die('Usage: smh backup list <ref>')
+    const { backups, schedule, lastRunAt } = await backupReq('GET', `?ref=${encodeURIComponent(ref)}`)
+    console.log(`Schedule: \x1b[36m${schedule}\x1b[0m${lastRunAt ? `  (last run: ${fmtDate(lastRunAt)})` : ''}`)
+    if (!backups.length) { console.log('No backups yet.'); return }
+    console.log()
+    printTable(backups, [
+      { key: 'filename', label: 'FILENAME' },
+      { key: 'createdAt', label: 'CREATED', fmt: fmtDate },
+      { key: 'sizeBytes', label: 'SIZE', fmt: formatBytes },
+    ])
+    return
+  }
+
+  if (sub === 'run') {
+    const ref = args[0]
+    if (!ref) die('Usage: smh backup run <ref>')
+    console.log(`Running backup for project ${ref}…`)
+    const { backup } = await backupReq('POST', '', { ref, action: 'run' })
+    ok(`Backup complete: ${backup.filename} (${formatBytes(backup.sizeBytes)})`)
+    return
+  }
+
+  if (sub === 'schedule') {
+    const [ref, sched] = args
+    const valid = ['daily', 'weekly', 'off']
+    if (!ref || !sched || !valid.includes(sched)) {
+      die('Usage: smh backup schedule <ref> daily|weekly|off')
+    }
+    await backupReq('POST', '', { ref, action: 'schedule', schedule: sched })
+    ok(`Backup schedule set to "${sched}" for project ${ref}.`)
+    return
+  }
+
+  if (sub === 'restore') {
+    const [ref, filename] = args
+    if (!ref || !filename) die('Usage: smh backup restore <ref> <filename> --confirm')
+    if (!args.includes('--confirm')) {
+      die(`Restoring overwrites the live database. Re-run with --confirm to proceed:\n  smh backup restore ${ref} ${filename} --confirm`)
+    }
+    console.log(`Restoring ${filename} into project ${ref}…`)
+    await backupReq('POST', '', { ref, action: 'restore', filename })
+    ok('Database restored successfully.')
+    return
+  }
+
+  if (sub === 'delete') {
+    const [ref, filename] = args
+    if (!ref || !filename) die('Usage: smh backup delete <ref> <filename>')
+    const qs = `?ref=${encodeURIComponent(ref)}&filename=${encodeURIComponent(filename)}`
+    await backupReq('DELETE', qs)
+    ok(`Backup ${filename} deleted.`)
+    return
+  }
+
+  if (sub === 'download') {
+    const [ref, filename] = args
+    if (!ref || !filename) die('Usage: smh backup download <ref> <filename> [--out <path>]')
+    const outPath = parseFlag(args, '--out') ?? filename
+    const url = `${BACKUP_API}/${encodeURIComponent(filename)}?ref=${encodeURIComponent(ref)}`
+    const headers = {}
+    const auth = basicAuthHeader()
+    if (auth) headers['Authorization'] = auth
+    let res
+    try { res = await fetch(url, { headers }) }
+    catch (err) { die(`Cannot reach Studio at ${BASE} — is it running?\n  ${err.message}`) }
+    if (!res.ok) {
+      const text = await res.text()
+      let data; try { data = JSON.parse(text) } catch { data = text }
+      die(`HTTP ${res.status}: ${data?.error ?? JSON.stringify(data)}`)
+    }
+    const { createWriteStream } = await import('node:fs')
+    const writer = createWriteStream(outPath)
+    process.stdout.write(`Downloading ${filename} → ${outPath}…`)
+    await new Promise((resolve, reject) => {
+      writer.on('finish', resolve)
+      writer.on('error', reject)
+      ;(async () => {
+        try {
+          for await (const chunk of res.body) writer.write(chunk)
+          writer.end()
+        } catch (e) { reject(e) }
+      })()
+    })
+    console.log(' done.')
+    ok(`Saved to ${outPath}`)
+    return
+  }
+
+  const valid = ['list', 'run', 'schedule', 'restore', 'delete', 'download']
+  console.error(`Unknown backup sub-command: ${sub ?? '(none)'}`)
+  console.error(`Valid: ${valid.join(', ')}`)
+  process.exit(1)
+}
+
 // ── overlay command ───────────────────────────────────────────────────────────
 
 const OPTIONAL_PROFILES = [
@@ -704,6 +838,14 @@ function usage() {
   smh migrations <ref>                 list applied migrations on a project
   smh migrations compare               show migration state across all projects
 
+\x1b[1mBackups:\x1b[0m
+  smh backup list     <ref>                        list backups and schedule
+  smh backup run      <ref>                        trigger a pg_dump backup now
+  smh backup schedule <ref> daily|weekly|off       set automatic backup schedule
+  smh backup restore  <ref> <filename> --confirm   restore database from a backup
+  smh backup delete   <ref> <filename>             delete a backup file
+  smh backup download <ref> <filename> [--out <path>]  download backup to local file
+
 \x1b[1mMigrate from Supabase Cloud:\x1b[0m
   smh migrate <ref> --source <db-url>  dump cloud DB and restore into a self-hosted project
     [--schemas public,auth]            comma-separated schemas (default: public)
@@ -755,6 +897,7 @@ switch (cmd) {
   case 'cluster-failover': await cmdClusterFailover(sub);  break
   case 'oauth-urls':       await cmdOauthUrls(sub);        break
   case 'storage':          await cmdStorage(sub);          break
+  case 'backup':           await cmdBackup(sub, rest);     break
   case 'migrate':          await cmdMigrate(sub, rest);    break
   case 'overlay':          await cmdOverlay(sub ? [sub, ...rest] : []); break
 

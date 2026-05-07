@@ -16,10 +16,54 @@ Built on top of [Supabase Studio](https://github.com/supabase/supabase/tree/mast
 | **OAuth setup** | View GoTrue callback URLs for every project in one place |
 | **Storage** | See storage API endpoints across all projects |
 | **Migrations** | Compare migration state across all projects simultaneously |
+| **Backups** | Schedule pg_dump backups and restore with one click or one CLI command |
 | **Import from Cloud** | Migrate a Supabase Cloud database to a self-hosted project |
 | **Read replicas** | Add streaming replicas to any project [Business] |
 | **Warm standby** | Automatic failover with a hot standby [Business] |
 | **Cluster mode** | Multi-node read scaling [Enterprise] |
+
+## Database Backups
+
+Schedule automatic `pg_dump` backups for any project and restore in one click.
+
+### In the Studio UI
+
+Go to **Project Settings → Backups**. From there you can:
+
+- Set a **daily** or **weekly** automatic backup schedule
+- Trigger a backup immediately with **Run backup now**
+- **Download**, **restore**, or **delete** any existing backup
+
+Backups are stored as compressed `.pgdump` files under `${STUDIO_DATA_DIR}/backups/{project-ref}/`.
+
+### Via the CLI
+
+```bash
+# List backups and schedule
+smh backup list <ref>
+
+# Trigger a backup now
+smh backup run <ref>
+
+# Set automatic schedule
+smh backup schedule <ref> daily
+smh backup schedule <ref> weekly
+smh backup schedule <ref> off
+
+# Restore (requires --confirm — overwrites the live database)
+smh backup restore <ref> <filename> --confirm
+
+# Download a backup file to disk
+smh backup download <ref> <filename>
+smh backup download <ref> <filename> --out /path/to/save.pgdump
+
+# Delete a backup
+smh backup delete <ref> <filename>
+```
+
+> **Note:** Backups require the project to be running (the pg_dump runs inside the project's Postgres container via `docker exec`).
+
+---
 
 ## Migrate from Supabase Cloud
 
@@ -77,6 +121,13 @@ smh oauth-urls [ref]                  print OAuth callback URLs
 smh storage    [ref]                  print storage API URLs
 smh migrations <ref>                  list applied migrations
 smh migrations compare                compare migration state across all projects
+
+smh backup list     <ref>             list backups and current schedule
+smh backup run      <ref>             trigger a pg_dump backup now
+smh backup schedule <ref> daily|weekly|off  set automatic backup schedule
+smh backup restore  <ref> <file> --confirm  restore database from backup
+smh backup delete   <ref> <file>      delete a backup file
+smh backup download <ref> <file> [--out <path>]  download backup to disk
 
 smh migrate <ref> --source <db-url>   migrate from Supabase Cloud
   [--schemas public,auth]             schemas to include (default: public)

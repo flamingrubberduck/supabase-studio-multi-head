@@ -218,6 +218,7 @@
     <div class="nav-links">
       <a href="#features">Features</a>
       <a href="#minimal">Components</a>
+      <a href="#backups">Backups</a>
       <a href="#migrate">Migrate</a>
       <a href="#quickstart">Quickstart</a>
       <a href="#pricing">Pricing</a>
@@ -292,6 +293,11 @@
         <div class="feature-icon">☁️</div>
         <h3>Migrate from Cloud</h3>
         <p>Dump your Supabase Cloud database and restore it into any self-hosted project — directly from the UI or CLI. No manual <code style="font-size:12px;">pg_dump</code> wrangling.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">💾</div>
+        <h3>Automated backups</h3>
+        <p>Schedule daily or weekly pg_dump backups per project. Download, restore, or delete any backup from the UI or CLI — no extra tooling needed.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">🪶</div>
@@ -375,6 +381,60 @@ docker compose \
 
 <span class="comment"># Print the right command for your selection</span>
 smh overlay storage realtime</pre>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="backups">
+  <div class="container">
+    <div class="section-label">Backups</div>
+    <h2>Scheduled pg_dump backups, zero config</h2>
+    <p>
+      Every project gets its own backup schedule. Multi-Head Studio runs <code>pg_dump</code>
+      inside the project's Postgres container on your chosen interval and stores the compressed
+      dump file on the host. No cron jobs to write, no extra tools to install.
+    </p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h3>Open Project Settings → Backups</h3>
+          <p>Each project has its own backup page. Set the schedule to <strong>Daily</strong> or <strong>Weekly</strong>, or trigger a backup on demand with <strong>Run backup now</strong>.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h3>Browse and download</h3>
+          <p>All backups are listed with size and timestamp. Download any backup as a <code>.pgdump</code> file for off-site archiving.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h3>One-click restore</h3>
+          <p>Pick any backup and click <strong>Restore</strong>. The dump is piped back through <code>pg_restore</code> inside the container. A confirmation dialog guards against accidental overwrites.</p>
+        </div>
+      </div>
+    </div>
+
+    <p style="margin-top:20px;margin-bottom:8px;font-size:14px;">Or use the CLI:</p>
+    <div class="code-wrap">
+<pre><span class="comment"># List backups and current schedule for a project</span>
+smh backup list &lt;ref&gt;
+
+<span class="comment"># Trigger a backup now</span>
+smh backup run &lt;ref&gt;
+
+<span class="comment"># Set a daily automatic schedule</span>
+smh backup schedule &lt;ref&gt; daily
+
+<span class="comment"># Restore from a specific backup (--confirm required)</span>
+smh backup restore &lt;ref&gt; &lt;filename&gt; --confirm
+
+<span class="comment"># Download a backup to disk</span>
+smh backup download &lt;ref&gt; &lt;filename&gt; --out ./my-backup.pgdump</pre>
     </div>
   </div>
 </section>
@@ -531,6 +591,12 @@ cd multihead &amp;&amp; bash start.sh</pre>
             <td class="yes">✓ Enterprise</td>
           </tr>
           <tr>
+            <td>Database backups (UI + CLI)</td>
+            <td class="yes">✓ managed</td>
+            <td class="no">Manual</td>
+            <td class="yes">✓ built-in</td>
+          </tr>
+          <tr>
             <td>Migrate from Cloud (UI + CLI)</td>
             <td class="no">✗ manual only</td>
             <td class="no">✗ manual only</td>
@@ -571,6 +637,7 @@ cd multihead &amp;&amp; bash start.sh</pre>
           <li>Unlimited projects from the UI</li>
           <li>Full Supabase Studio interface</li>
           <li>Import &amp; browse remote stacks</li>
+          <li>Scheduled pg_dump backups (UI + CLI)</li>
           <li>Migrate from Supabase Cloud (UI + CLI)</li>
           <li>Self-hosted on your own server</li>
           <li class="dim">Failover &amp; standby</li>
