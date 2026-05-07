@@ -32,6 +32,7 @@ import {
   TabsTrigger_Shadcn_,
 } from 'ui'
 
+import { MigrateFromCloudPanel } from '@/components/interfaces/SelfHosted/MigrateFromCloudPanel'
 import { MigrationsPanel } from '@/components/interfaces/SelfHosted/MigrationsPanel'
 import { OAuthSetupPanel } from '@/components/interfaces/SelfHosted/OAuthSetupPanel'
 import { StoragePanel } from '@/components/interfaces/SelfHosted/StoragePanel'
@@ -54,6 +55,8 @@ import type { NextPageWithLayout } from '@/types'
 type SelfHostedProject = OrgProject & {
   public_url?: string
   kong_http_port?: number
+  docker_project?: string
+  creation_mode?: string
 }
 
 function statusBadgeVariant(
@@ -73,7 +76,7 @@ function statusBadgeVariant(
   }
 }
 
-type Tab = 'projects' | 'oauth' | 'storage' | 'migrations'
+type Tab = 'projects' | 'oauth' | 'storage' | 'migrations' | 'import'
 
 const ProjectsPage: NextPageWithLayout = () => {
   const router = useRouter()
@@ -157,6 +160,7 @@ const ProjectsPage: NextPageWithLayout = () => {
               <TabsTrigger_Shadcn_ value="oauth">OAuth Setup</TabsTrigger_Shadcn_>
               <TabsTrigger_Shadcn_ value="storage">Storage</TabsTrigger_Shadcn_>
               <TabsTrigger_Shadcn_ value="migrations">Migrations</TabsTrigger_Shadcn_>
+              <TabsTrigger_Shadcn_ value="import">Import from Cloud</TabsTrigger_Shadcn_>
             </TabsList_Shadcn_>
 
             {/* ── OAuth tab ──────────────────────────────────────────── */}
@@ -172,6 +176,11 @@ const ProjectsPage: NextPageWithLayout = () => {
             {/* ── Migrations tab ─────────────────────────────────────── */}
             <TabsContent_Shadcn_ value="migrations">
               <MigrationsPanel projects={projects} />
+            </TabsContent_Shadcn_>
+
+            {/* ── Import from Cloud tab ───────────────────────────────── */}
+            <TabsContent_Shadcn_ value="import">
+              <MigrateFromCloudPanel projects={projects} />
             </TabsContent_Shadcn_>
 
             {/* ── Projects tab ───────────────────────────────────────── */}

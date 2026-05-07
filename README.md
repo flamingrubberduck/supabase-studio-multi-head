@@ -1,9 +1,108 @@
-# Supabase Studio
+# Supabase Studio — Multi-Head Fork
 
-A dashboard for managing your self-hosted Supabase project, and used on our [hosted platform](https://supabase.com/dashboard). Built with:
+A self-hosted Supabase dashboard that manages **multiple isolated Supabase projects** from a single Studio instance. Each project gets its own Docker Compose stack with dedicated Postgres, GoTrue, Storage, and Kong containers.
+
+Built on top of [Supabase Studio](https://github.com/supabase/supabase/tree/master/apps/studio) with:
 
 - [Next.js](https://nextjs.org/)
 - [Tailwind](https://tailwindcss.com/)
+
+## Multi-Head features
+
+| Feature | Description |
+|---|---|
+| **Multiple projects** | Spin up isolated Supabase stacks with one click or one CLI command |
+| **Organizations** | Group projects into organizations with role-based access |
+| **OAuth setup** | View GoTrue callback URLs for every project in one place |
+| **Storage** | See storage API endpoints across all projects |
+| **Migrations** | Compare migration state across all projects simultaneously |
+| **Import from Cloud** | Migrate a Supabase Cloud database to a self-hosted project |
+| **Read replicas** | Add streaming replicas to any project [Business] |
+| **Warm standby** | Automatic failover with a hot standby [Business] |
+| **Cluster mode** | Multi-node read scaling [Enterprise] |
+
+## Migrate from Supabase Cloud
+
+Move an existing Supabase Cloud database to a self-hosted project in a few steps.
+
+### In the Studio UI
+
+1. Go to **Projects → Import from Cloud**
+2. Enter your cloud project's **direct** database connection string
+   - Find it under: *Project Settings → Database → Connection string → URI*
+   - Use `db.<ref>.supabase.co:5432` — not the pooler URL
+3. Select the target self-hosted project
+4. Choose which schemas to migrate (default: `public`)
+5. Optionally check **Schema only** to skip row data
+6. Click **Next**, review the warning, then **Run migration**
+
+The migration runs `pg_dump` inside the target project's Postgres container and streams the output directly into that project's database. Progress is shown in a live log panel.
+
+### Via the CLI
+
+```bash
+# Migrate schema + data (public schema only)
+smh migrate <ref> --source "postgresql://postgres:[password]@db.[ref].supabase.co:5432/postgres"
+
+# Schema only
+smh migrate <ref> --source "postgresql://..." --schema-only
+
+# Include additional schemas (e.g. auth users)
+smh migrate <ref> --source "postgresql://..." --schemas public,auth
+```
+
+> **Note:** The target project must be running and healthy before migrating. Existing objects in the selected schemas will be dropped and recreated.
+
+## CLI reference (`smh`)
+
+```
+smh list                              list all projects
+smh create <name>                     create a new project
+smh rename <ref> <name>               rename a project
+smh delete <ref>                      delete a project
+smh start  <ref>                      start a stopped project
+smh stop   <ref>                      stop a running project
+smh status <ref>                      show project details
+smh health [ref]                      show live container health
+
+smh org list                          list organizations
+smh org create <name>                 create an organization
+smh org rename <slug> <name>          rename an organization
+
+smh member list   <org-slug>          list org members
+smh member add    <org-slug> <email>  --role <role> [--password <pw>]
+smh member remove <org-slug> <id>     remove a member
+
+smh oauth-urls [ref]                  print OAuth callback URLs
+smh storage    [ref]                  print storage API URLs
+smh migrations <ref>                  list applied migrations
+smh migrations compare                compare migration state across all projects
+
+smh migrate <ref> --source <db-url>   migrate from Supabase Cloud
+  [--schemas public,auth]             schemas to include (default: public)
+  [--schema-only]                     skip row data
+
+smh replica add    <ref> [--host H]   add a read replica      [Business]
+smh replica remove <ref> <replica>    remove a replica
+smh standby add    <ref> [--host H]   add a warm standby      [Business]
+smh standby remove <ref>              remove the standby
+smh failover         <ref>            trigger failover        [Business]
+smh cluster-failover <ref>            promote highest replica [Enterprise]
+
+smh license status                    show license tier
+smh license activate <key>            activate a license key
+smh license deactivate                revert to free tier
+```
+
+**Environment variables:**
+
+```bash
+STUDIO_URL=http://localhost:8000   # Studio base URL
+DASHBOARD_USERNAME=supabase        # Basic auth username
+DASHBOARD_PASSWORD=<password>      # Basic auth password
+```
+
+---
 
 ## What's included
 

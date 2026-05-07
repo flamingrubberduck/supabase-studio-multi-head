@@ -31,6 +31,9 @@
  *   smh failover         <ref>   # primary → standby
  *   smh cluster-failover <ref>   # cluster master → highest-rank healthy replica
  *
+ *   smh migrate <ref> --source <db-url> [--schemas <s1,s2>] [--schema-only]
+ *   smh migrate resume <ref> <job-id>
+ *
  *   smh license status
  *   smh license activate <key>
  *   smh license deactivate
@@ -524,6 +527,93 @@ async function cmdLicenseDeactivate() {
   ok('License deactivated — running as free tier')
 }
 
+// ── migrate command ───────────────────────────────────────────────────────────
+
+async function cmdMigrate(sub, args) {
+  // smh migrate resume <ref> <jobId>
+  if (sub === 'resume') {
+    const [ref, jobId] = args
+    if (!ref || !jobId) die('Usage: smh migrate resume <ref> <job-id>')
+
+    console.log(`Resuming migration ${jobId} for project ${ref}…\n`)
+
+    const { status: s0, data: d0 } = await plat(
+      'POST', ref, '/migrate',
+      { action: 'resume', job_id: jobId },
+      { allowNonOk: true }
+    )
+    if (!String(s0).startsWith('2')) die(d0?.error?.message ?? d0?.message ?? JSON.stringify(d0))
+
+    await pollMigrationJob(ref, d0.job_id)
+    return
+  }
+
+  // smh migrate <ref> --source <db-url> [--schemas …] [--schema-only]
+  const ref = sub
+  if (!ref) die('Usage: smh migrate <ref> --source <db-url> [--schemas public,auth] [--schema-only]')
+
+  const sourceUrl = parseFlag(args, '--source')
+  if (!sourceUrl) die('--source <db-url> is required.\n\n  Get it from: Project Settings → Database → Connection string → URI\n  Use the direct URL (db.<ref>.supabase.co), not the pooler.')
+
+  const schemasArg = parseFlag(args, '--schemas') ?? 'public'
+  const schemaOnly = args.includes('--schema-only')
+  const schemas    = schemasArg.split(',').map(s => s.trim()).filter(Boolean)
+
+  const masked = sourceUrl.replace(/:[^:@]+@/, ':****@')
+  console.log(`Migrating to project ${ref}…`)
+  console.log(`  Source:  ${masked}`)
+  console.log(`  Schemas: ${schemas.join(', ')}`)
+  console.log(`  Mode:    ${schemaOnly ? 'schema only' : 'schema + data'}`)
+  console.log()
+
+  const { status: s0, data: d0 } = await plat(
+    'POST', ref, '/migrate',
+    { source_db_url: sourceUrl, schemas, schema_only: schemaOnly },
+    { allowNonOk: true }
+  )
+  if (!String(s0).startsWith('2')) die(d0?.error?.message ?? d0?.message ?? JSON.stringify(d0))
+
+  await pollMigrationJob(ref, d0.job_id)
+}
+
+async function pollMigrationJob(ref, jobId) {
+  let logOffset = 0
+
+  for (;;) {
+    await new Promise(r => setTimeout(r, 2000))
+
+    const { status: s1, data: job } = await plat(
+      'GET', ref, `/migrate?job=${jobId}`,
+      undefined, { allowNonOk: true }
+    )
+    if (!String(s1).startsWith('2')) die(job?.error?.message ?? JSON.stringify(job))
+
+    const newLines = (job.logs ?? []).slice(logOffset)
+    for (const line of newLines) console.log(`  ${line}`)
+    logOffset += newLines.length
+
+    if (job.status === 'done') {
+      console.log()
+      ok('Migration completed successfully.')
+      break
+    }
+    if (job.status === 'done-with-warnings') {
+      console.log()
+      console.warn(`\x1b[33mWarning:\x1b[0m Migration completed with ${job.restoreErrors} restore error(s).`)
+      console.warn('Search the log above for "pg_restore: error:" to review them.')
+      break
+    }
+    if (job.status === 'error') {
+      console.log()
+      die('Migration failed — see log above for details.')
+    }
+    if (job.status === 'interrupted') {
+      console.log()
+      die(`Migration was interrupted.\nTo resume: smh migrate resume ${ref} ${jobId}`)
+    }
+  }
+}
+
 // ── usage ─────────────────────────────────────────────────────────────────────
 
 function usage() {
@@ -557,6 +647,12 @@ function usage() {
   smh storage    [ref]                 print storage API URLs per project
   smh migrations <ref>                 list applied migrations on a project
   smh migrations compare               show migration state across all projects
+
+\x1b[1mMigrate from Supabase Cloud:\x1b[0m
+  smh migrate <ref> --source <db-url>  dump cloud DB and restore into a self-hosted project
+    [--schemas public,auth]            comma-separated schemas (default: public)
+    [--schema-only]                    skip row data, migrate schema only
+  smh migrate resume <ref> <job-id>    resume an interrupted migration (restore phase only)
 
 \x1b[1mCluster (read replicas):\x1b[0m
   smh replica add    <ref> [--host H]  provision a read replica  [Business]
@@ -597,6 +693,7 @@ switch (cmd) {
   case 'cluster-failover': await cmdClusterFailover(sub);  break
   case 'oauth-urls':       await cmdOauthUrls(sub);        break
   case 'storage':          await cmdStorage(sub);          break
+  case 'migrate':          await cmdMigrate(sub, rest);    break
 
   case 'migrations':
     if (!sub || sub === 'compare') await cmdMigrationsCompare()

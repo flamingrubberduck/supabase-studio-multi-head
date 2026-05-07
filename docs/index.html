@@ -217,6 +217,7 @@
     <span class="nav-logo">Supabase <span>Multi-Head</span></span>
     <div class="nav-links">
       <a href="#features">Features</a>
+      <a href="#migrate">Migrate</a>
       <a href="#quickstart">Quickstart</a>
       <a href="#pricing">Pricing</a>
     </div>
@@ -287,6 +288,11 @@
         <p>Register existing Supabase deployments on other hosts and browse them from one place.</p>
       </div>
       <div class="feature-card">
+        <div class="feature-icon">☁️</div>
+        <h3>Migrate from Cloud</h3>
+        <p>Dump your Supabase Cloud database and restore it into any self-hosted project — directly from the UI or CLI. No manual <code style="font-size:12px;">pg_dump</code> wrangling.</p>
+      </div>
+      <div class="feature-card">
         <div class="feature-icon">⚡</div>
         <h3>Standby &amp; failover <span style="font-size:11px;color:var(--green);font-weight:600;">BUSINESS</span></h3>
         <p>Provision warm standbys and trigger failover with one click. WAL streaming replication included.</p>
@@ -321,6 +327,60 @@
         </tbody>
       </table>
     </div>
+  </div>
+</section>
+
+<section class="section" id="migrate">
+  <div class="container">
+    <div class="section-label">Migrate from Cloud</div>
+    <h2>Leave Supabase Cloud in minutes</h2>
+    <p>
+      Multi-Head Studio can dump any Supabase Cloud database and restore it into a
+      self-hosted project in a single operation. It runs <code>pg_dump</code> inside the
+      target project's Postgres container — no extra tools to install, no intermediate files.
+    </p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h3>Open Projects → Import from Cloud</h3>
+          <p>A new tab in the Projects page. Paste your cloud database's direct connection string (find it under <em>Project Settings → Database → Connection string → URI</em>).</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h3>Pick a target project and schemas</h3>
+          <p>Select which self-hosted project to restore into. Default is the <code>public</code> schema; you can include <code>auth</code> to also migrate user accounts.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h3>Confirm and watch the live log</h3>
+          <p>A real-time log streams pg_dump and psql output as the migration runs. Done in seconds for small databases, minutes for large ones.</p>
+        </div>
+      </div>
+    </div>
+
+    <p style="margin-top:20px;margin-bottom:8px;font-size:14px;">Or use the CLI:</p>
+    <div class="code-wrap">
+<pre><span class="comment"># Migrate schema + data (public schema)</span>
+smh migrate &lt;ref&gt; \
+  --source "postgresql://postgres:[password]@db.[ref].supabase.co:5432/postgres"
+
+<span class="comment"># Schema only — no row data</span>
+smh migrate &lt;ref&gt; --source "postgresql://..." --schema-only
+
+<span class="comment"># Include auth users as well</span>
+smh migrate &lt;ref&gt; --source "postgresql://..." --schemas public,auth</pre>
+    </div>
+
+    <p style="margin-top:16px;font-size:13px;color:var(--muted);">
+      ⚠ Use the <strong>direct</strong> connection URL (<code>db.&lt;ref&gt;.supabase.co:5432</code>), not the pooler URL.
+      The target project must be running before migrating. Existing objects in the selected schemas will be dropped and recreated.
+    </p>
   </div>
 </section>
 
@@ -374,6 +434,7 @@ cd multihead &amp;&amp; bash start.sh</pre>
     <ul class="audience-list">
       <li>Developers running multiple client or side projects on a single server</li>
       <li>Teams wanting staging + production environments without paying Cloud prices</li>
+      <li>Anyone moving off Supabase Cloud and needing a smooth migration path</li>
       <li>Anyone who wants full ownership of their data with no vendor lock-in</li>
       <li>Ops engineers who want standby and failover without a managed database service</li>
     </ul>
@@ -421,6 +482,12 @@ cd multihead &amp;&amp; bash start.sh</pre>
             <td class="yes">✓ Enterprise</td>
           </tr>
           <tr>
+            <td>Migrate from Cloud (UI + CLI)</td>
+            <td class="no">✗ manual only</td>
+            <td class="no">✗ manual only</td>
+            <td class="yes">✓ built-in</td>
+          </tr>
+          <tr>
             <td>Data ownership</td>
             <td class="no">Vendor hosted</td>
             <td class="yes">✓</td>
@@ -455,6 +522,7 @@ cd multihead &amp;&amp; bash start.sh</pre>
           <li>Unlimited projects from the UI</li>
           <li>Full Supabase Studio interface</li>
           <li>Import &amp; browse remote stacks</li>
+          <li>Migrate from Supabase Cloud (UI + CLI)</li>
           <li>Self-hosted on your own server</li>
           <li class="dim">Failover &amp; standby</li>
           <li class="dim">Read replica cluster</li>
