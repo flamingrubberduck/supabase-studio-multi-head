@@ -35,11 +35,13 @@ const ProjectSettings: NextPageWithLayout = () => {
   const router = useRouter()
 
   const { ref: projectRef } = router.query
+  const isPocketBase = (project as any)?.creation_mode === 'pocketbase'
   useEffect(() => {
     if (!IS_PLATFORM && projectRef) {
-      router.push(`/project/${projectRef}/settings/log-drains`)
+      const dest = isPocketBase ? 'pocketbase' : 'log-drains'
+      router.push(`/project/${projectRef}/settings/${dest}`)
     }
-  }, [router, projectRef])
+  }, [router, projectRef, isPocketBase])
 
   const { data: subscription } = useOrgSubscriptionQuery({ orgSlug: selectedOrganization?.slug })
   const hasHipaaAddon = subscriptionHasHipaaAddon(subscription)

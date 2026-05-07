@@ -64,9 +64,15 @@ export interface StoredProject {
   docker_host?: string
 
   // How this project was created:
-  //   'stack'    — full Docker Compose stack (default)
-  //   'embedded' — Postgres database inside the existing instance (no new containers)
-  creation_mode?: 'stack' | 'embedded'
+  //   'stack'       — full Docker Compose stack (default)
+  //   'embedded'    — Postgres database inside the existing instance (no new containers)
+  //   'pocketbase'  — single-container PocketBase stack
+  creation_mode?: 'stack' | 'embedded' | 'pocketbase'
+
+  // PocketBase-specific fields (only when creation_mode === 'pocketbase')
+  pocketbase_port?: number
+  pocketbase_admin_email?: string
+  pocketbase_admin_password?: string
 }
 
 const DATA_DIR =
@@ -300,6 +306,58 @@ export function updateProjectFields(ref: string, patch: Partial<StoredProject>):
   const existing = readFromDisk()
   const updated = existing.map((p) => (p.ref === ref ? { ...p, ...patch } : p))
   writeToDisk(updated)
+}
+
+// ── PocketBase projects ───────────────────────────────────────────────────────
+
+export interface CreatePocketBaseProjectData {
+  name: string
+  organization_slug?: string
+  public_url: string
+  pocketbase_port: number
+  docker_project: string
+  pocketbase_admin_email: string
+  pocketbase_admin_password: string
+  docker_host?: string
+}
+
+export function createPocketBaseStoredProject(
+  ref: string,
+  data: CreatePocketBaseProjectData
+): StoredProject {
+  const existing = readFromDisk()
+  const all = getStoredProjects()
+  const id = Math.max(...all.map((p) => p.id), 0) + 1
+
+  const orgSlug = data.organization_slug ?? 'default-org-slug'
+  const org = getStoredOrganizationBySlug(orgSlug)
+
+  const project: StoredProject = {
+    id,
+    ref,
+    name: data.name,
+    organization_id: org?.id ?? 1,
+    organization_slug: orgSlug,
+    cloud_provider: 'localhost',
+    status: 'COMING_UP',
+    region: 'local',
+    inserted_at: new Date().toISOString(),
+    public_url: data.public_url,
+    docker_project: data.docker_project,
+    pocketbase_port: data.pocketbase_port,
+    pocketbase_admin_email: data.pocketbase_admin_email,
+    pocketbase_admin_password: data.pocketbase_admin_password,
+    creation_mode: 'pocketbase',
+    // PocketBase projects have no Supabase-specific credentials
+    db_password: '',
+    anon_key: '',
+    service_key: '',
+    jwt_secret: '',
+    ...(data.docker_host !== undefined && { docker_host: data.docker_host }),
+  }
+
+  writeToDisk([...existing, project])
+  return project
 }
 
 export interface EmbeddedProjectData {

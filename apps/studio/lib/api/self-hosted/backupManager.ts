@@ -89,7 +89,7 @@ export function setSchedule(projectRef: string, schedule: BackupSchedule): void 
 }
 
 function buildDockerEnv(dockerHost?: string): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {}
+  const env = {} as NodeJS.ProcessEnv
   for (const key of [
     'PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TERM', 'TMPDIR', 'TMP', 'TEMP',
     'DOCKER_HOST', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH',

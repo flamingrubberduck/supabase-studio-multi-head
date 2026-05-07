@@ -8,6 +8,7 @@ import type { StoredMember } from '@/lib/api/self-hosted/membersStore'
 import {
   createStoredProject,
   createEmbeddedStoredProject,
+  createPocketBaseStoredProject,
   getStoredProjects,
   updateProjectFields,
   updateProjectStatus,
@@ -26,6 +27,14 @@ import {
   embeddedConnectionInfo,
   embeddedDbName,
 } from '@/lib/api/self-hosted/embeddedOrchestrator'
+import {
+  allocatePocketBasePort,
+  discoverPocketBasePorts,
+  extractPocketBaseHostname,
+  generatePocketBaseCredentials,
+  launchPocketBaseStack,
+  waitForPocketBaseHealth,
+} from '@/lib/api/self-hosted/pocketbaseOrchestrator'
 import { provisionReplica } from '@/lib/api/self-hosted/clusterManager'
 import { requireTier } from '@/lib/api/self-hosted/licenseManager'
 
@@ -142,6 +151,56 @@ const handleCreate = async (req: NextApiRequest, res: NextApiResponse) => {
       organization_slug: project.organization_slug,
       cloud_provider: project.cloud_provider,
       status: 'ACTIVE_HEALTHY',
+      region: project.region,
+      inserted_at: project.inserted_at,
+    })
+  }
+
+  // ── PocketBase mode: single-container PocketBase stack ──────────────────────
+  if (creation_mode === 'pocketbase') {
+    const ref = crypto.randomBytes(6).toString('hex')
+    const credentials = generatePocketBaseCredentials()
+
+    const storedPbPorts = getStoredProjects()
+      .map((p) => p.pocketbase_port)
+      .filter((p): p is number => p !== undefined)
+    const livePbPorts = discoverPocketBasePorts()
+    const usedPbPorts = [...new Set([...storedPbPorts, ...livePbPorts])]
+    const pocketbasePort = allocatePocketBasePort(usedPbPorts)
+
+    const dockerHostVal = docker_host && typeof docker_host === 'string' ? docker_host : undefined
+    const hostname = extractPocketBaseHostname(dockerHostVal)
+    const publicUrl = `http://${hostname}:${pocketbasePort}`
+    const dockerProject = `pocketbase-${ref}`
+
+    const project = createPocketBaseStoredProject(ref, {
+      name: name.trim(),
+      organization_slug: organization_slug ?? 'default-org-slug',
+      public_url: publicUrl,
+      pocketbase_port: pocketbasePort,
+      docker_project: dockerProject,
+      pocketbase_admin_email: credentials.adminEmail,
+      pocketbase_admin_password: credentials.adminPassword,
+      ...(dockerHostVal && { docker_host: dockerHostVal }),
+    })
+
+    launchPocketBaseStack({ ref, pocketbasePort, credentials, dockerHost: dockerHostVal })
+      .then(() => waitForPocketBaseHealth(publicUrl))
+      .then(() => updateProjectStatus(project.ref, 'ACTIVE_HEALTHY'))
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error(`[pocketbase] Stack launch failed for ${project.ref}: ${msg}`)
+        updateProjectStatus(project.ref, 'INACTIVE')
+      })
+
+    return res.status(201).json({
+      id: project.id,
+      ref: project.ref,
+      name: project.name,
+      organization_id: project.organization_id,
+      organization_slug: project.organization_slug,
+      cloud_provider: project.cloud_provider,
+      status: 'COMING_UP',
       region: project.region,
       inserted_at: project.inserted_at,
     })

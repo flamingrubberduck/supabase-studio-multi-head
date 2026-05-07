@@ -66,7 +66,7 @@ export function LicenseSettings() {
             ) : isPro ? (
               <>
                 <ShieldCheck size={18} className="text-brand" />
-                <Badge variant="brand" className="font-semibold">Pro</Badge>
+                <Badge variant="success" className="font-semibold">Pro</Badge>
                 {license.email && (
                   <span className="text-sm text-foreground-light">Licensed to {license.email}</span>
                 )}

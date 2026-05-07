@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { ChevronDown, ChevronUp, Database, Layers, Server, ShieldCheck } from 'lucide-react'
+import { ChevronDown, ChevronUp, Database, Layers, Package, Server, ShieldCheck } from 'lucide-react'
 import { useRouter } from 'next/router'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
@@ -14,7 +14,7 @@ import { useProjectCreateMutation } from '@/data/projects/project-create-mutatio
 import { useLicenseQuery } from '@/data/misc/license-query'
 import { useSelectedOrganizationQuery } from '@/hooks/misc/useSelectedOrganization'
 
-type DeployMode = 'standalone' | 'standby' | 'cluster' | 'embedded'
+type DeployMode = 'standalone' | 'standby' | 'cluster' | 'embedded' | 'pocketbase'
 type LicenseTier = 'free' | 'business' | 'enterprise'
 
 const TIER_RANK: Record<LicenseTier, number> = { free: 0, business: 1, enterprise: 2 }
@@ -82,6 +82,12 @@ const DEPLOY_MODES: {
     icon: <Database size={16} />,
     requiredTier: 'enterprise',
   },
+  {
+    value: 'pocketbase',
+    label: 'PocketBase',
+    description: 'Single-container PocketBase backend. SQLite-backed REST API, auth, file storage, and realtime.',
+    icon: <Package size={16} />,
+  },
 ]
 
 export function SelfHostedProjectCreation() {
@@ -116,10 +122,12 @@ export function SelfHostedProjectCreation() {
         selfHosted: {
           ...(deployMode === 'embedded'
             ? { creation_mode: 'embedded' }
-            : {
-                docker_host,
-                ...(deployMode === 'cluster' && { cluster_mode: true }),
-              }),
+            : deployMode === 'pocketbase'
+              ? { creation_mode: 'pocketbase', docker_host }
+              : {
+                  docker_host,
+                  ...(deployMode === 'cluster' && { cluster_mode: true }),
+                }),
         },
       })
     } catch (err) {
@@ -152,7 +160,11 @@ export function SelfHostedProjectCreation() {
 
   const submitLabel = () => {
     if (isPostCreate) return 'Provisioning standby...'
-    if (isCreating) return deployMode === 'embedded' ? 'Creating database...' : 'Launching stack...'
+    if (isCreating) {
+      if (deployMode === 'embedded') return 'Creating database...'
+      if (deployMode === 'pocketbase') return 'Launching PocketBase...'
+      return 'Launching stack...'
+    }
     return 'Create project'
   }
 

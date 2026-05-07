@@ -5,6 +5,7 @@ import { STUDIO_AUTH_GOTRUE } from '@/lib/constants'
 import { getGoTrueAuthMember } from '@/lib/api/self-hosted/studioGoTrue'
 import { teardownProjectStack } from '@/lib/api/self-hosted/orchestrator'
 import { dropEmbeddedDatabase } from '@/lib/api/self-hosted/embeddedOrchestrator'
+import { teardownPocketBaseStack } from '@/lib/api/self-hosted/pocketbaseOrchestrator'
 import { dropReplicationSlot } from '@/lib/api/self-hosted/replicationManager'
 import { deleteStoredProject, getStoredProjectByRef, getStoredProjects, updateProjectFields } from '@/lib/api/self-hosted/projectsStore'
 import { PROJECT_REST_URL } from '@/lib/constants/api'
@@ -131,6 +132,14 @@ const handleDelete = async (req: NextApiRequest, res: NextApiResponse) => {
         `[embedded] DB drop failed for ${ref}: ${err instanceof Error ? err.message : err}`
       )
     })
+  } else if (project.creation_mode === 'pocketbase') {
+    try {
+      teardownPocketBaseStack(ref, project.docker_host)
+    } catch (err) {
+      console.error(
+        `[pocketbase] Stack teardown failed for ${ref}: ${err instanceof Error ? err.message : err}`
+      )
+    }
   } else if (project.docker_project) {
     teardownProjectStack(ref, project.docker_project, project.docker_host).catch((err: unknown) => {
       console.error(

@@ -20,6 +20,8 @@ export const useGenerateSettingsMenu = () => {
 
   const isProjectActive = project?.status === PROJECT_STATUS.ACTIVE_HEALTHY
 
+  const isPocketBase = (project as { creation_mode?: string } | undefined)?.creation_mode === 'pocketbase'
+
   if (!IS_PLATFORM) {
     return [
       {
@@ -31,12 +33,23 @@ export const useGenerateSettingsMenu = () => {
             url: `/project/${ref}/settings/log-drains`,
             items: [],
           },
-          {
-            name: 'Backups',
-            key: 'backups',
-            url: `/project/${ref}/settings/backups`,
-            items: [],
-          },
+          ...(isPocketBase
+            ? [
+                {
+                  name: 'PocketBase',
+                  key: 'pocketbase',
+                  url: `/project/${ref}/settings/pocketbase`,
+                  items: [] as [],
+                },
+              ]
+            : [
+                {
+                  name: 'Backups',
+                  key: 'backups',
+                  url: `/project/${ref}/settings/backups`,
+                  items: [] as [],
+                },
+              ]),
         ],
       },
     ]

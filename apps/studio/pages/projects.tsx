@@ -296,7 +296,16 @@ const ProjectsPage: NextPageWithLayout = () => {
                     className="cursor-pointer"
                     onClick={() => router.push(`/project/${project.ref}`)}
                   >
-                    <TableCell className="font-medium">{project.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <span className="flex items-center gap-2">
+                        {project.name}
+                        {project.creation_mode === 'pocketbase' && (
+                          <Badge variant="default" className="text-[10px] px-1.5 py-0.5 font-medium">
+                            PocketBase
+                          </Badge>
+                        )}
+                      </span>
+                    </TableCell>
 
                     <TableCell>
                       <Badge variant={statusBadgeVariant(project.status ?? undefined)}>

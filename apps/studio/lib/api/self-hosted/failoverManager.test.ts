@@ -124,6 +124,12 @@ describe('provisionStandby', () => {
       anonKey: 'SHOULD-BE-OVERRIDDEN',
       serviceKey: 'SHOULD-BE-OVERRIDDEN',
       dashboardPassword: 'dash-pass',
+      secretKeyBase: 'secret-key-base',
+      vaultEncKey: 'vault-enc-key',
+      logflarePublicToken: 'lf-public',
+      logflarePrivateToken: 'lf-private',
+      s3AccessKeyId: 's3-key-id',
+      s3AccessKeySecret: 's3-key-secret',
       poolerTenantId: 'new-tenant',
     })
 
