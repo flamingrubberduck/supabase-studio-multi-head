@@ -1,0 +1,85 @@
+# Minimal overlay — makes optional components opt-in instead of always-on.
+#
+# Default (no profiles): runs only the core stack.
+#   Core: db, auth, rest, kong, studio, meta + analytics stub
+#   Excluded: vector, realtime, storage, imgproxy, functions, supavisor
+#
+# Re-enable components selectively with --profile flags:
+#
+#   --profile realtime      Realtime WebSocket subscriptions
+#   --profile storage       Storage API + imgproxy image transformations
+#   --profile edge-functions  Edge Functions (Deno runtime)
+#   --profile pooler        Supavisor connection pooler (ports 5432/6543)
+#   --profile analytics     Logflare + Vector log pipeline
+#
+# Examples:
+#   # Core only
+#   docker compose -f docker-compose.yml -f docker-compose.minimal.yml up -d
+#
+#   # Core + storage + realtime
+#   docker compose -f docker-compose.yml -f docker-compose.minimal.yml \
+#     --profile storage --profile realtime up -d
+#
+#   # Full stack (equivalent to base docker-compose.yml)
+#   docker compose -f docker-compose.yml -f docker-compose.minimal.yml \
+#     --profile realtime --profile storage --profile edge-functions \
+#     --profile pooler --profile analytics up -d
+#
+# Can be combined with other overlays, e.g. docker-compose.multihead.yml.
+
+services:
+
+  # ── Analytics (Logflare) ─────────────────────────────────────────────────────
+  # Studio has depends_on: analytics: service_healthy, so we cannot simply
+  # remove the service. Instead we replace it with a trivial stub that passes
+  # the health check immediately and consumes negligible resources.
+  # When the 'analytics' profile is active this definition is overridden by the
+  # real Logflare image from the base file (merge order: base wins on profile
+  # match since the base file has no profiles on this service).
+  analytics:
+    image: alpine:3.20
+    command: ["sh", "-c", "sleep infinity"]
+    healthcheck:
+      test: ["CMD", "true"]
+      interval: 5s
+      timeout: 2s
+      retries: 1
+      start_period: 0s
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Disable the Logs tab — nothing to show without a real analytics backend.
+  studio:
+    environment:
+      NEXT_PUBLIC_ENABLE_LOGS: "false"
+
+  # ── Vector ───────────────────────────────────────────────────────────────────
+  # Log collector that feeds Logflare. No other service depends on it.
+  vector:
+    profiles: ["analytics"]
+
+  # ── Realtime ─────────────────────────────────────────────────────────────────
+  # WebSocket subscription engine. No other service depends on it.
+  realtime:
+    profiles: ["realtime"]
+
+  # ── Storage + imgproxy ───────────────────────────────────────────────────────
+  # storage depends on imgproxy (service_started), so both share the same
+  # profile. Enabling one without the other would break storage startup.
+  storage:
+    profiles: ["storage"]
+
+  imgproxy:
+    profiles: ["storage"]
+
+  # ── Edge Functions ───────────────────────────────────────────────────────────
+  # Deno-based Edge Runtime. No other service depends on it.
+  functions:
+    profiles: ["edge-functions"]
+
+  # ── Supavisor (connection pooler) ────────────────────────────────────────────
+  # Exposes Postgres on host ports 5432 / 6543. No other service depends on it.
+  # Disable if you connect directly to the db container or use an external pooler.
+  supavisor:
+    profiles: ["pooler"]

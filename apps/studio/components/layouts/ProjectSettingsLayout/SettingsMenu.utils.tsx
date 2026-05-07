@@ -31,6 +31,12 @@ export const useGenerateSettingsMenu = () => {
             url: `/project/${ref}/settings/log-drains`,
             items: [],
           },
+          {
+            name: 'Backups',
+            key: 'backups',
+            url: `/project/${ref}/settings/backups`,
+            items: [],
+          },
         ],
       },
     ]
