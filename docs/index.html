@@ -220,6 +220,7 @@
       <a href="#minimal">Components</a>
       <a href="#backups">Backups</a>
       <a href="#migrate">Migrate</a>
+      <a href="#pocketbase">PocketBase</a>
       <a href="#quickstart">Quickstart</a>
       <a href="#pricing">Pricing</a>
     </div>
@@ -232,8 +233,8 @@
     <h1>Manage <em>multiple Supabase projects</em><br>from one dashboard</h1>
     <p class="hero-sub">
       A drop-in upgrade to Supabase Studio that lets you spin up, manage, and monitor
-      multiple isolated Supabase projects — all from a single self-hosted UI.
-      No Supabase Cloud account. No per-project dashboards.
+      multiple isolated Supabase <em>and</em> PocketBase projects — all from a single
+      self-hosted UI. No Supabase Cloud account. No per-project dashboards.
     </p>
     <div class="cta-row">
       <a class="btn btn-primary" href="#quickstart">Get started in 30 seconds</a>
@@ -303,6 +304,21 @@
         <div class="feature-icon">🪶</div>
         <h3>Modular components</h3>
         <p>Enable only what you need. Realtime, Storage, Edge Functions, and the connection pooler are all opt-in via Docker Compose profiles — no YAML editing required.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🗄️</div>
+        <h3>Embedded projects</h3>
+        <p>Create a new Postgres database inside an existing project's instance — no extra containers, minimal overhead.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📦</div>
+        <h3>PocketBase projects</h3>
+        <p>Spin up a PocketBase backend (SQLite, REST API, auth, realtime, file storage) as a Docker Compose stack or plain <code style="font-size:12px;">docker run</code> container.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔄</div>
+        <h3>PocketBase migration</h3>
+        <p>Bi-directional data migration between PocketBase and Supabase. Move collections to tables or tables to collections — from the UI or CLI.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">⚡</div>
@@ -493,6 +509,80 @@ smh migrate &lt;ref&gt; --source "postgresql://..." --schemas public,auth</pre>
   </div>
 </section>
 
+<section class="section" id="pocketbase">
+  <div class="container">
+    <div class="section-label">PocketBase</div>
+    <h2>Add PocketBase projects alongside Supabase</h2>
+    <p>
+      PocketBase is a self-contained backend — SQLite database, REST API, auth, realtime, and
+      file storage — that runs as a single binary. Multi-Head Studio manages PocketBase projects
+      the same way it manages Supabase projects: spin up, monitor, migrate, and delete from one UI.
+    </p>
+
+    <div class="table-wrap" style="margin-bottom:28px;">
+      <table>
+        <thead>
+          <tr><th>Mode</th><th>How it runs</th><th>Best for</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>pocketbase</code></td>
+            <td>Docker Compose stack</td>
+            <td>Full isolation; own port, own container, own volume</td>
+          </tr>
+          <tr>
+            <td><code>pocketbase-embedded</code></td>
+            <td>Plain <code>docker run</code></td>
+            <td>Lighter footprint; no Compose project overhead</td>
+          </tr>
+          <tr>
+            <td><code>pocketbase-embedded --target &lt;ref&gt;</code></td>
+            <td>Collection namespace inside an existing PocketBase</td>
+            <td>Zero containers; logical sub-project sharing one PB instance</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="margin-bottom:8px;font-size:14px;">Create PocketBase projects via the UI or CLI:</p>
+    <div class="code-wrap">
+<pre><span class="comment"># Full PocketBase stack (Docker Compose)</span>
+smh create "my-pb" --mode pocketbase
+
+<span class="comment"># Lightweight PocketBase (plain docker run)</span>
+smh create "my-pb" --mode pocketbase-embedded
+
+<span class="comment"># Collection namespace inside an existing PocketBase project</span>
+smh create "my-ns" --mode pocketbase-embedded --target &lt;ref&gt;</pre>
+    </div>
+
+    <h3 style="margin-top:32px;margin-bottom:12px;font-size:18px;font-weight:700;">Bi-directional data migration</h3>
+    <p>
+      Move data between PocketBase and Supabase in either direction. Collections map to Postgres
+      tables; types are converted automatically. Run a live migration from
+      <strong>Project Settings → PocketBase → Migrate</strong> or the CLI.
+    </p>
+    <div class="code-wrap">
+<pre><span class="comment"># PocketBase → Supabase (collections → tables)</span>
+smh pb-migrate &lt;ref&gt; \
+  --direction pb-to-supa \
+  --pb-url http://localhost:8090 \
+  --pb-email admin@example.com \
+  --pb-password mypassword
+
+<span class="comment"># Supabase → PocketBase (tables → collections)</span>
+smh pb-migrate &lt;ref&gt; \
+  --direction supa-to-pb \
+  --pb-url http://localhost:8090 \
+  --pb-email admin@example.com \
+  --pb-password mypassword
+
+<span class="comment"># Poll a running migration job</span>
+smh pb-migrate status &lt;ref&gt; --job &lt;job-id&gt;</pre>
+    </div>
+  </div>
+</section>
+
 <section class="section" id="quickstart">
   <div class="container">
     <div class="section-label">Quickstart</div>
@@ -603,6 +693,24 @@ cd multihead &amp;&amp; bash start.sh</pre>
             <td class="yes">✓ built-in</td>
           </tr>
           <tr>
+            <td>Embedded projects (shared Postgres)</td>
+            <td class="no">✗</td>
+            <td class="no">✗</td>
+            <td class="yes">✓ built-in</td>
+          </tr>
+          <tr>
+            <td>PocketBase projects (UI + CLI)</td>
+            <td class="no">✗</td>
+            <td class="no">✗</td>
+            <td class="yes">✓ built-in</td>
+          </tr>
+          <tr>
+            <td>PocketBase ↔ Supabase migration</td>
+            <td class="no">✗</td>
+            <td class="no">✗</td>
+            <td class="yes">✓ built-in</td>
+          </tr>
+          <tr>
             <td>Data ownership</td>
             <td class="no">Vendor hosted</td>
             <td class="yes">✓</td>
@@ -636,6 +744,8 @@ cd multihead &amp;&amp; bash start.sh</pre>
         <ul class="pricing-features">
           <li>Unlimited projects from the UI</li>
           <li>Full Supabase Studio interface</li>
+          <li>Embedded &amp; PocketBase project modes</li>
+          <li>PocketBase ↔ Supabase migration</li>
           <li>Import &amp; browse remote stacks</li>
           <li>Scheduled pg_dump backups (UI + CLI)</li>
           <li>Migrate from Supabase Cloud (UI + CLI)</li>
