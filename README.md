@@ -92,6 +92,8 @@ smh cluster-failover <ref>            promote highest replica [Enterprise]
 smh license status                    show license tier
 smh license activate <key>            activate a license key
 smh license deactivate                revert to free tier
+
+smh overlay                           list optional component profiles and compose commands
 ```
 
 **Environment variables:**
@@ -101,6 +103,31 @@ STUDIO_URL=http://localhost:8000   # Studio base URL
 DASHBOARD_USERNAME=supabase        # Basic auth username
 DASHBOARD_PASSWORD=<password>      # Basic auth password
 ```
+
+---
+
+## Lean / minimal deployment
+
+`docker/docker-compose.minimal.yml` converts every optional service to opt-in via Docker Compose profiles. Run it when you want a lighter stack or don't need every component.
+
+```bash
+# Core stack only (db, auth, rest, kong, studio, meta)
+docker compose -f docker-compose.yml -f docker-compose.minimal.yml up -d
+
+# Add components back selectively
+docker compose -f docker-compose.yml -f docker-compose.minimal.yml \
+  --profile storage --profile realtime up -d
+```
+
+| Profile | Enables |
+|---------|---------|
+| `realtime` | Realtime WebSocket subscriptions |
+| `storage` | Storage API + imgproxy image transformations |
+| `edge-functions` | Edge Functions (Deno runtime) |
+| `pooler` | Supavisor connection pooler (ports 5432 / 6543) |
+| `analytics` | Logflare + Vector log pipeline |
+
+Can be combined with other overlays. Use `smh overlay` to print ready-to-run compose commands.
 
 ---
 

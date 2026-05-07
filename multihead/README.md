@@ -31,6 +31,15 @@ multihead/
 │   └── test-cluster-failover.mjs  # E2E test suite (cluster / failover / replication)
 └── utils/
     └── generate-keys.sh        # Generate JWT secret and API keys
+
+docker/                         # Base Supabase stack (used by multihead/docker-compose.yml)
+├── docker-compose.yml          # Full stack — all services always-on
+├── docker-compose.minimal.yml  # Overlay — makes optional services opt-in via profiles
+├── docker-compose.multihead.yml
+├── docker-compose.overlay.yml  # (legacy location — prefer multihead/ copy)
+├── docker-compose.s3.yml       # S3 storage backend
+├── docker-compose.nginx.yml    # Nginx + Certbot TLS
+└── docker-compose.caddy.yml    # Caddy TLS
 ```
 
 ---
@@ -133,6 +142,69 @@ docker compose -f docker-compose.yml -f docker-compose.overlay.yml down
 # Without the overlay, Compose restores the original studio image from docker-compose.yml
 docker compose up -d studio
 ```
+
+---
+
+## Lean / minimal deployment
+
+`docker/docker-compose.minimal.yml` converts every optional service to opt-in via Docker Compose profiles. Use it when you want a lighter stack or don't need every component.
+
+**Core services** (always started): `db`, `auth`, `rest`, `kong`, `studio`, `meta`  
+**Optional** (disabled by default, re-enable with `--profile`):
+
+| Profile | Services | When to enable |
+|---------|----------|----------------|
+| `realtime` | Realtime | Apps that use `supabase-js` subscriptions |
+| `storage` | Storage API + imgproxy | Apps that store files |
+| `edge-functions` | Edge Runtime | Apps that use Edge Functions |
+| `pooler` | Supavisor | When you need the connection pooler ports (5432 / 6543) |
+| `analytics` | Logflare + Vector | When you want the Studio Logs tab |
+
+### New install — minimal
+
+Pass the overlay to `docker compose` after your base file:
+
+```bash
+# Core only — smallest possible footprint
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.minimal.yml \
+  up -d
+
+# Core + storage + realtime (common app stack)
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.minimal.yml \
+  --profile storage \
+  --profile realtime \
+  up -d
+
+# Full stack (same as base docker-compose.yml, nothing excluded)
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.minimal.yml \
+  --profile realtime \
+  --profile storage \
+  --profile edge-functions \
+  --profile pooler \
+  --profile analytics \
+  up -d
+```
+
+### Existing install — combined with the multi-head overlay
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.overlay.yml \
+  -f docker-compose.minimal.yml \
+  --profile storage \
+  up -d
+```
+
+> The `analytics` Logflare service is replaced by a lightweight stub when omitted — the Studio UI hides the Logs tab automatically.
+
+Use `smh overlay` to print ready-to-run compose commands for any combination of profiles.
 
 ---
 

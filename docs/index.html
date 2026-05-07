@@ -217,6 +217,7 @@
     <span class="nav-logo">Supabase <span>Multi-Head</span></span>
     <div class="nav-links">
       <a href="#features">Features</a>
+      <a href="#minimal">Components</a>
       <a href="#migrate">Migrate</a>
       <a href="#quickstart">Quickstart</a>
       <a href="#pricing">Pricing</a>
@@ -293,6 +294,11 @@
         <p>Dump your Supabase Cloud database and restore it into any self-hosted project — directly from the UI or CLI. No manual <code style="font-size:12px;">pg_dump</code> wrangling.</p>
       </div>
       <div class="feature-card">
+        <div class="feature-icon">🪶</div>
+        <h3>Modular components</h3>
+        <p>Enable only what you need. Realtime, Storage, Edge Functions, and the connection pooler are all opt-in via Docker Compose profiles — no YAML editing required.</p>
+      </div>
+      <div class="feature-card">
         <div class="feature-icon">⚡</div>
         <h3>Standby &amp; failover <span style="font-size:11px;color:var(--green);font-weight:600;">BUSINESS</span></h3>
         <p>Provision warm standbys and trigger failover with one click. WAL streaming replication included.</p>
@@ -326,6 +332,49 @@
           <tr><td>Pooler</td><td>6543</td><td>6553</td><td>6563</td></tr>
         </tbody>
       </table>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="minimal">
+  <div class="container">
+    <div class="section-label">Optional components</div>
+    <h2>Run only what you need</h2>
+    <p>
+      The <code>docker-compose.minimal.yml</code> overlay converts every optional service to opt-in.
+      Start lean and add components back with a single <code>--profile</code> flag — no config file editing.
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Profile</th><th>Enables</th><th>Skip when…</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>realtime</code></td><td>Realtime WebSocket subscriptions</td><td>Your app doesn't use <code>supabase-js</code> subscriptions</td></tr>
+          <tr><td><code>storage</code></td><td>Storage API + imgproxy</td><td>Your app doesn't store files</td></tr>
+          <tr><td><code>edge-functions</code></td><td>Edge Functions (Deno runtime)</td><td>You don't use Edge Functions</td></tr>
+          <tr><td><code>pooler</code></td><td>Supavisor (ports 5432 / 6543)</td><td>You connect directly to Postgres</td></tr>
+          <tr><td><code>analytics</code></td><td>Logflare + Vector log pipeline</td><td>You don't need the Studio Logs tab</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="code-wrap">
+<pre><span class="comment"># Core only — minimal footprint</span>
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.minimal.yml \
+  up -d
+
+<span class="comment"># Core + storage + realtime (typical app stack)</span>
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.minimal.yml \
+  --profile storage \
+  --profile realtime \
+  up -d
+
+<span class="comment"># Print the right command for your selection</span>
+smh overlay storage realtime</pre>
     </div>
   </div>
 </section>

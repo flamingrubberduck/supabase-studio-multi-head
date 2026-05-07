@@ -38,6 +38,8 @@
  *   smh license activate <key>
  *   smh license deactivate
  *
+ *   smh overlay                          list optional component profiles
+ *
  * Environment:
  *   STUDIO_URL          Base URL of Studio (default: http://localhost:8000)
  *   DASHBOARD_USERNAME  Basic auth username
@@ -614,6 +616,60 @@ async function pollMigrationJob(ref, jobId) {
   }
 }
 
+// ── overlay command ───────────────────────────────────────────────────────────
+
+const OPTIONAL_PROFILES = [
+  { name: 'realtime',       desc: 'Realtime WebSocket subscriptions' },
+  { name: 'storage',        desc: 'Storage API + imgproxy image transformations' },
+  { name: 'edge-functions', desc: 'Edge Functions (Deno runtime)' },
+  { name: 'pooler',         desc: 'Supavisor connection pooler (ports 5432 / 6543)' },
+  { name: 'analytics',      desc: 'Logflare + Vector log pipeline' },
+]
+
+async function cmdOverlay(args) {
+  // Profile names can be passed directly: smh overlay realtime storage
+  // --run executes the generated command instead of just printing it
+  const run      = args.includes('--run')
+  const selected = args.filter(a => a !== '--run' && OPTIONAL_PROFILES.some(p => p.name === a))
+  const unknown  = args.filter(a => a !== '--run' && !OPTIONAL_PROFILES.some(p => p.name === a))
+  if (unknown.length) die(`Unknown profile(s): ${unknown.join(', ')}\nValid: ${OPTIONAL_PROFILES.map(p => p.name).join(', ')}`)
+
+  console.log(`\x1b[1mOptional component profiles\x1b[0m  (docker-compose.minimal.yml)\n`)
+  for (const p of OPTIONAL_PROFILES) {
+    const active = selected.includes(p.name)
+    const marker = active ? `\x1b[32m✓\x1b[0m` : ` `
+    console.log(`  ${marker} \x1b[36m--profile ${p.name.padEnd(16)}\x1b[0m ${p.desc}`)
+  }
+
+  const hasProfiles = selected.length > 0
+  const profilePart = selected.map(p => `  --profile ${p}`).join(' \\\n')
+
+  const lines = [
+    'docker compose \\',
+    '  -f docker-compose.yml \\',
+    '  -f docker-compose.minimal.yml \\',
+    ...(hasProfiles ? [profilePart + ' \\'] : []),
+    '  up -d',
+  ]
+  console.log('\n\x1b[1mCompose command:\x1b[0m\n')
+  console.log(lines.join('\n'))
+
+  if (!hasProfiles) {
+    console.log('\n\x1b[2m# Core only. Pass profile names to enable optional components:\x1b[0m')
+    console.log(`\x1b[2m# smh overlay ${OPTIONAL_PROFILES.map(p => p.name).join(' ')}\x1b[0m`)
+  }
+
+  if (run) {
+    const { execSync } = await import('node:child_process')
+    const profileFlags = selected.map(p => `--profile ${p}`).join(' ')
+    console.log()
+    execSync(
+      `docker compose -f docker-compose.yml -f docker-compose.minimal.yml ${profileFlags} up -d`.trim(),
+      { stdio: 'inherit' }
+    )
+  }
+}
+
 // ── usage ─────────────────────────────────────────────────────────────────────
 
 function usage() {
@@ -669,6 +725,12 @@ function usage() {
   smh license activate <key>           activate a license key
   smh license deactivate               revert to free tier
 
+\x1b[1mOptional components (docker-compose.minimal.yml):\x1b[0m
+  smh overlay                          list profiles and print compose command (core only)
+  smh overlay <profile>...             list profiles with selected ones enabled + print command
+  smh overlay <profile>... --run       also execute the compose command
+  Profiles: realtime  storage  edge-functions  pooler  analytics
+
 \x1b[1mEnvironment:\x1b[0m
   STUDIO_URL          Studio base URL  (default: http://localhost:8000)
   DASHBOARD_USERNAME  Basic auth username
@@ -694,6 +756,7 @@ switch (cmd) {
   case 'oauth-urls':       await cmdOauthUrls(sub);        break
   case 'storage':          await cmdStorage(sub);          break
   case 'migrate':          await cmdMigrate(sub, rest);    break
+  case 'overlay':          await cmdOverlay(sub ? [sub, ...rest] : []); break
 
   case 'migrations':
     if (!sub || sub === 'compare') await cmdMigrationsCompare()
