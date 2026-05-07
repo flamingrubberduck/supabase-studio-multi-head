@@ -1,10 +1,18 @@
 /**
  * Docker orchestration for PocketBase projects.
  *
- * Each PocketBase project gets a single-container Docker Compose stack with a
- * named volume for persistent data.  The admin superuser is auto-created on
- * first boot via the PB_SUPERUSER_EMAIL / PB_SUPERUSER_PASSWORD env vars
- * (supported since PocketBase v0.22).
+ * Two modes:
+ *
+ *   pocketbase          — full Docker Compose stack (docker compose up -p pocketbase-{ref})
+ *                         Files written to STACKS_DIR/{ref}/
+ *
+ *   pocketbase-embedded — plain docker run, no Compose project, no stack directory.
+ *                         Container name: pb-{ref}
+ *                         Volume name:    pb-{ref}-data
+ *                         Mirrors Supabase "embedded" (no new Compose stack).
+ *
+ * Admin superuser is auto-created via PB_SUPERUSER_EMAIL / PB_SUPERUSER_PASSWORD
+ * env vars (supported since PocketBase v0.22).
  */
 
 import crypto from 'node:crypto'
@@ -61,28 +69,43 @@ export function allocatePocketBasePort(usedPorts: number[]): number {
 }
 
 /**
- * Scans the projects store for pocketbase_port values and live Docker stacks.
- * Returns all ports currently in use by PocketBase stacks.
+ * Scans for ports already in use by any PocketBase container (both Compose stacks
+ * named pocketbase-* and plain embedded containers named pb-*).
  */
 export function discoverPocketBasePorts(): number[] {
   const ports: number[] = []
   try {
+    // Compose stacks: pocketbase-{ref}-pocketbase-1
     const lsResult = spawnSync('docker', ['compose', 'ls', '--format', 'json', '--all'], {
       encoding: 'utf-8',
       timeout: 8000,
     })
-    if (lsResult.error || lsResult.status !== 0) return ports
-    const stacks = JSON.parse(lsResult.stdout.trim() || '[]') as Array<{ Name: string }>
-    for (const stack of stacks) {
-      if (!stack.Name.startsWith('pocketbase-')) continue
-      const psResult = spawnSync(
-        'docker',
-        ['ps', '--filter', `name=${stack.Name}-pocketbase`, '--format', '{{.Ports}}'],
-        { encoding: 'utf-8', timeout: 5000 }
-      )
-      if (psResult.error || psResult.status !== 0) continue
-      const match = psResult.stdout.match(/(?:0\.0\.0\.0:|:::)?(\d+)->8090\/tcp/)
-      if (match) ports.push(parseInt(match[1], 10))
+    if (!lsResult.error && lsResult.status === 0) {
+      const stacks = JSON.parse(lsResult.stdout.trim() || '[]') as Array<{ Name: string }>
+      for (const stack of stacks) {
+        if (!stack.Name.startsWith('pocketbase-')) continue
+        const psResult = spawnSync(
+          'docker',
+          ['ps', '--filter', `name=${stack.Name}-pocketbase`, '--format', '{{.Ports}}'],
+          { encoding: 'utf-8', timeout: 5000 }
+        )
+        if (psResult.error || psResult.status !== 0) continue
+        const match = psResult.stdout.match(/(?:0\.0\.0\.0:|:::)?(\d+)->8090\/tcp/)
+        if (match) ports.push(parseInt(match[1], 10))
+      }
+    }
+
+    // Plain embedded containers: pb-{ref}
+    const psResult = spawnSync(
+      'docker',
+      ['ps', '--filter', 'name=pb-', '--format', '{{.Ports}}'],
+      { encoding: 'utf-8', timeout: 5000 }
+    )
+    if (!psResult.error && psResult.status === 0) {
+      for (const line of psResult.stdout.split('\n')) {
+        const match = line.match(/(?:0\.0\.0\.0:|:::)?(\d+)->8090\/tcp/)
+        if (match) ports.push(parseInt(match[1], 10))
+      }
     }
   } catch { /* non-fatal */ }
   return ports
@@ -200,4 +223,65 @@ export function extractPocketBaseHostname(dockerHost?: string): string {
   } catch {
     return MULTI_HEAD_HOST
   }
+}
+
+// ── Embedded lifecycle (plain docker run, no Compose project) ─────────────────
+
+/** Container name for an embedded PocketBase instance. */
+export function embeddedPocketBaseContainerName(ref: string): string {
+  return `pb-${ref}`
+}
+
+/** Docker-managed volume name for an embedded PocketBase instance. */
+export function embeddedPocketBaseVolumeName(ref: string): string {
+  return `pb-${ref}-data`
+}
+
+/**
+ * Launches a PocketBase container with `docker run` — no Compose stack, no stack
+ * directory.  Equivalent to Supabase embedded mode: the existing Docker daemon is
+ * reused but no new Compose project is created.
+ */
+export async function launchEmbeddedPocketBase(opts: {
+  ref: string
+  pocketbasePort: number
+  credentials: PocketBaseCredentials
+  dockerHost?: string
+}): Promise<void> {
+  const containerName = embeddedPocketBaseContainerName(opts.ref)
+  const volumeName = embeddedPocketBaseVolumeName(opts.ref)
+  const env = buildDockerEnv(opts.dockerHost)
+
+  const result = spawnSync(
+    'docker',
+    [
+      'run', '-d',
+      '--name', containerName,
+      '--restart', 'unless-stopped',
+      '-p', `${opts.pocketbasePort}:8090`,
+      '-v', `${volumeName}:/pb_data`,
+      '-e', `PB_SUPERUSER_EMAIL=${opts.credentials.adminEmail}`,
+      '-e', `PB_SUPERUSER_PASSWORD=${opts.credentials.adminPassword}`,
+      'ghcr.io/pocketbase/pocketbase:latest',
+    ],
+    { env, timeout: 120_000, encoding: 'utf-8' }
+  )
+
+  if (result.error) throw result.error
+  if (result.status !== 0) {
+    throw new Error(`docker run failed:\n${result.stderr || result.stdout}`)
+  }
+}
+
+/**
+ * Stops and removes the embedded PocketBase container and its data volume.
+ */
+export function teardownEmbeddedPocketBase(ref: string, dockerHost?: string): void {
+  const containerName = embeddedPocketBaseContainerName(ref)
+  const volumeName = embeddedPocketBaseVolumeName(ref)
+  const env = buildDockerEnv(dockerHost)
+
+  spawnSync('docker', ['stop', containerName], { env, timeout: 30_000, encoding: 'utf-8' })
+  spawnSync('docker', ['rm', containerName], { env, timeout: 30_000, encoding: 'utf-8' })
+  spawnSync('docker', ['volume', 'rm', volumeName], { env, timeout: 30_000, encoding: 'utf-8' })
 }

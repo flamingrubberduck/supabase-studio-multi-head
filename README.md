@@ -12,6 +12,10 @@ Built on top of [Supabase Studio](https://github.com/supabase/supabase/tree/mast
 | Feature | Description |
 |---|---|
 | **Multiple projects** | Spin up isolated Supabase stacks with one click or one CLI command |
+| **Embedded projects** | New Postgres database inside an existing instance — no extra containers |
+| **PocketBase projects** | Single-container PocketBase stacks (SQLite, REST API, auth, realtime, storage) |
+| **PocketBase embedded** | PocketBase via plain `docker run` or as a collection namespace inside an existing PB |
+| **PocketBase migration** | Bi-directional data migration between PocketBase and Supabase |
 | **Organizations** | Group projects into organizations with role-based access |
 | **OAuth setup** | View GoTrue callback URLs for every project in one place |
 | **Storage** | See storage API endpoints across all projects |
@@ -101,7 +105,14 @@ smh migrate <ref> --source "postgresql://..." --schemas public,auth
 
 ```
 smh list                              list all projects
-smh create <name>                     create a new project
+smh create <name>                     create a full Supabase stack (default)
+  [--mode stack]                      full Docker Compose stack (default)
+  [--mode embedded]                   new DB inside default Postgres (no containers)
+  [--mode embedded --target <ref>]    new DB inside a specific project's Postgres
+  [--mode pocketbase]                 PocketBase via Docker Compose
+  [--mode pocketbase-embedded]        PocketBase via plain docker run
+  [--mode pocketbase-embedded --target <ref>]  collection namespace inside existing PB
+  [--host <docker_host>]              remote Docker host (ssh:// or tcp://)
 smh rename <ref> <name>               rename a project
 smh delete <ref>                      delete a project
 smh start  <ref>                      start a stopped project
@@ -133,6 +144,13 @@ smh migrate <ref> --source <db-url>   migrate from Supabase Cloud
   [--schemas public,auth]             schemas to include (default: public)
   [--schema-only]                     skip row data
 
+smh pb-migrate <ref>                  migrate data between PocketBase and Supabase
+  --direction pb-to-supa|supa-to-pb   migration direction
+  --pb-url <url>                      PocketBase public URL
+  --pb-email <email>                  PocketBase admin email
+  --pb-password <password>            PocketBase admin password
+smh pb-migrate status <ref> --job <id>  poll a running PB migration job
+
 smh replica add    <ref> [--host H]   add a read replica      [Business]
 smh replica remove <ref> <replica>    remove a replica
 smh standby add    <ref> [--host H]   add a warm standby      [Business]
@@ -153,6 +171,60 @@ smh overlay                           list optional component profiles and compo
 STUDIO_URL=http://localhost:8000   # Studio base URL
 DASHBOARD_USERNAME=supabase        # Basic auth username
 DASHBOARD_PASSWORD=<password>      # Basic auth password
+```
+
+---
+
+## PocketBase projects
+
+PocketBase is a self-contained backend (SQLite, REST API, auth, realtime, file storage) that runs as a single binary or Docker container.
+
+### Deploy modes
+
+| Mode | Description | Docker |
+|------|-------------|--------|
+| `pocketbase` | Full Docker Compose stack | New Compose project per PB instance |
+| `pocketbase-embedded` | Plain `docker run` | Single container, no Compose project |
+| `pocketbase-embedded --target <ref>` | Collection namespace inside an existing PB | No new container |
+
+### In the Studio UI
+
+1. Go to **Projects → New project**
+2. Select **PocketBase** or **PocketBase (embedded)** as the deployment mode
+3. For embedded, optionally pick a target PocketBase project from the dropdown to share its instance
+4. Once running, go to **Project Settings → PocketBase** for credentials and admin URL
+
+### Via the CLI
+
+```bash
+# Standalone PocketBase (Docker Compose)
+smh create "my-pb" --mode pocketbase
+
+# Lightweight PocketBase (docker run, no Compose)
+smh create "my-pb" --mode pocketbase-embedded
+
+# Logical namespace inside an existing PocketBase project
+smh create "my-ns" --mode pocketbase-embedded --target <ref>
+```
+
+### Migrating data between PocketBase and Supabase
+
+```bash
+# PocketBase → Supabase (collections become tables)
+smh pb-migrate <ref> \
+  --direction pb-to-supa \
+  --pb-url http://localhost:8090 \
+  --pb-email admin@example.com \
+  --pb-password mypassword
+
+# Supabase → PocketBase (tables become collections)
+smh pb-migrate <ref> \
+  --direction supa-to-pb \
+  --pb-url http://localhost:8090 \
+  --pb-email admin@example.com \
+  --pb-password mypassword
+
+# Or use the Studio UI: Project Settings → PocketBase → Migrate tab
 ```
 
 ---

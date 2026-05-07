@@ -64,15 +64,25 @@ export interface StoredProject {
   docker_host?: string
 
   // How this project was created:
-  //   'stack'       — full Docker Compose stack (default)
-  //   'embedded'    — Postgres database inside the existing instance (no new containers)
-  //   'pocketbase'  — single-container PocketBase stack
-  creation_mode?: 'stack' | 'embedded' | 'pocketbase'
+  //   'stack'               — full Docker Compose stack (default)
+  //   'embedded'            — Postgres database inside the existing instance (no new containers)
+  //   'pocketbase'          — single-container PocketBase Docker Compose stack
+  //   'pocketbase-embedded' — plain docker run, no Compose project (mirrors 'embedded')
+  creation_mode?: 'stack' | 'embedded' | 'pocketbase' | 'pocketbase-embedded'
 
-  // PocketBase-specific fields (only when creation_mode === 'pocketbase')
+  // PocketBase-specific fields (only when creation_mode === 'pocketbase' or 'pocketbase-embedded')
   pocketbase_port?: number
   pocketbase_admin_email?: string
   pocketbase_admin_password?: string
+
+  // Set when this project is embedded inside another project:
+  //   - Supabase 'embedded' targeting a specific project  → ref of the host Supabase project
+  //   - PocketBase 'pocketbase-embedded' targeting an existing PocketBase → ref of the host PocketBase project
+  embedded_target_ref?: string
+
+  // PocketBase collection namespace prefix for pocketbase-embedded-in-existing-PocketBase projects.
+  // All collections for this logical project are named {prefix}{collection}.
+  pocketbase_collection_prefix?: string
 }
 
 const DATA_DIR =
@@ -321,6 +331,113 @@ export interface CreatePocketBaseProjectData {
   docker_host?: string
 }
 
+export interface CreateEmbeddedPocketBaseProjectData {
+  name: string
+  organization_slug?: string
+  public_url: string
+  pocketbase_port: number
+  pocketbase_admin_email: string
+  pocketbase_admin_password: string
+  docker_host?: string
+}
+
+/** Data for a PocketBase project that shares an existing PocketBase instance (no Docker). */
+export interface CreatePocketBaseCollectionProjectData {
+  name: string
+  organization_slug?: string
+  /** Inherited from the target PocketBase project. */
+  public_url: string
+  pocketbase_admin_email: string
+  pocketbase_admin_password: string
+  /** Ref of the PocketBase project this one is nested inside. */
+  embedded_target_ref: string
+  /** Prefix for all collections belonging to this logical project, e.g. "abc123_". */
+  pocketbase_collection_prefix: string
+}
+
+/**
+ * Stores an embedded PocketBase project (plain docker run, no Compose stack).
+ * The ref is pre-determined by the caller so the container can be named pb-{ref}.
+ */
+export function createEmbeddedPocketBaseStoredProject(
+  ref: string,
+  data: CreateEmbeddedPocketBaseProjectData
+): StoredProject {
+  const existing = readFromDisk()
+  const all = getStoredProjects()
+  const id = Math.max(...all.map((p) => p.id), 0) + 1
+
+  const orgSlug = data.organization_slug ?? 'default-org-slug'
+  const org = getStoredOrganizationBySlug(orgSlug)
+
+  const project: StoredProject = {
+    id,
+    ref,
+    name: data.name,
+    organization_id: org?.id ?? 1,
+    organization_slug: orgSlug,
+    cloud_provider: 'localhost',
+    status: 'COMING_UP',
+    region: 'local',
+    inserted_at: new Date().toISOString(),
+    public_url: data.public_url,
+    pocketbase_port: data.pocketbase_port,
+    pocketbase_admin_email: data.pocketbase_admin_email,
+    pocketbase_admin_password: data.pocketbase_admin_password,
+    creation_mode: 'pocketbase-embedded',
+    db_password: '',
+    anon_key: '',
+    service_key: '',
+    jwt_secret: '',
+    ...(data.docker_host !== undefined && { docker_host: data.docker_host }),
+  }
+
+  writeToDisk([...existing, project])
+  return project
+}
+
+/**
+ * Registers a PocketBase project that lives as a collection namespace inside an
+ * existing PocketBase instance.  No Docker container is created — status is
+ * immediately ACTIVE_HEALTHY.
+ */
+export function createPocketBaseCollectionStoredProject(
+  ref: string,
+  data: CreatePocketBaseCollectionProjectData
+): StoredProject {
+  const existing = readFromDisk()
+  const all = getStoredProjects()
+  const id = Math.max(...all.map((p) => p.id), 0) + 1
+
+  const orgSlug = data.organization_slug ?? 'default-org-slug'
+  const org = getStoredOrganizationBySlug(orgSlug)
+
+  const project: StoredProject = {
+    id,
+    ref,
+    name: data.name,
+    organization_id: org?.id ?? 1,
+    organization_slug: orgSlug,
+    cloud_provider: 'localhost',
+    status: 'ACTIVE_HEALTHY',
+    region: 'local',
+    inserted_at: new Date().toISOString(),
+    public_url: data.public_url,
+    pocketbase_admin_email: data.pocketbase_admin_email,
+    pocketbase_admin_password: data.pocketbase_admin_password,
+    embedded_target_ref: data.embedded_target_ref,
+    pocketbase_collection_prefix: data.pocketbase_collection_prefix,
+    creation_mode: 'pocketbase-embedded',
+    db_password: '',
+    anon_key: '',
+    service_key: '',
+    jwt_secret: '',
+  }
+
+  writeToDisk([...existing, project])
+  return project
+}
+
 export function createPocketBaseStoredProject(
   ref: string,
   data: CreatePocketBaseProjectData
@@ -372,6 +489,8 @@ export interface EmbeddedProjectData {
   anon_key: string
   service_key: string
   jwt_secret: string
+  /** Set when embedded inside a specific project's Postgres (not the default instance). */
+  embedded_target_ref?: string
 }
 
 /**
@@ -407,6 +526,7 @@ export function createEmbeddedStoredProject(ref: string, data: EmbeddedProjectDa
     service_key: data.service_key,
     jwt_secret: data.jwt_secret,
     creation_mode: 'embedded',
+    ...(data.embedded_target_ref && { embedded_target_ref: data.embedded_target_ref }),
   }
 
   writeToDisk([...existing, project])

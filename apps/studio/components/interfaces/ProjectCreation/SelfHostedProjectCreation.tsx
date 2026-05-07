@@ -4,7 +4,17 @@ import { useRouter } from 'next/router'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
-import { Button, Form_Shadcn_, FormControl_Shadcn_, FormField_Shadcn_ } from 'ui'
+import {
+  Button,
+  Form_Shadcn_,
+  FormControl_Shadcn_,
+  FormField_Shadcn_,
+  Select_Shadcn_,
+  SelectContent_Shadcn_,
+  SelectItem_Shadcn_,
+  SelectTrigger_Shadcn_,
+  SelectValue_Shadcn_,
+} from 'ui'
 import { Input } from 'ui-patterns/DataInputs/Input'
 import { FormItemLayout } from 'ui-patterns/form/FormItemLayout/FormItemLayout'
 import { z } from 'zod'
@@ -12,9 +22,10 @@ import { z } from 'zod'
 import Panel from '@/components/ui/Panel'
 import { useProjectCreateMutation } from '@/data/projects/project-create-mutation'
 import { useLicenseQuery } from '@/data/misc/license-query'
+import { useOrgProjectsInfiniteQuery } from '@/data/projects/org-projects-infinite-query'
 import { useSelectedOrganizationQuery } from '@/hooks/misc/useSelectedOrganization'
 
-type DeployMode = 'standalone' | 'standby' | 'cluster' | 'embedded' | 'pocketbase'
+type DeployMode = 'standalone' | 'standby' | 'cluster' | 'embedded' | 'pocketbase' | 'pocketbase-embedded'
 type LicenseTier = 'free' | 'business' | 'enterprise'
 
 const TIER_RANK: Record<LicenseTier, number> = { free: 0, business: 1, enterprise: 2 }
@@ -88,7 +99,20 @@ const DEPLOY_MODES: {
     description: 'Single-container PocketBase backend. SQLite-backed REST API, auth, file storage, and realtime.',
     icon: <Package size={16} />,
   },
+  {
+    value: 'pocketbase-embedded',
+    label: 'PocketBase (embedded)',
+    description: 'PocketBase via plain docker run — no Compose stack. Lighter than standalone; shares the existing Docker daemon.',
+    icon: <Layers size={16} />,
+  },
 ]
+
+type SelfHostedProject = {
+  ref: string
+  name: string
+  status?: string
+  creation_mode?: string
+}
 
 export function SelfHostedProjectCreation() {
   const router = useRouter()
@@ -98,6 +122,20 @@ export function SelfHostedProjectCreation() {
   const [deployMode, setDeployMode] = useState<DeployMode>('standalone')
   const [isPostCreate, setIsPostCreate] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [embeddedTargetRef, setEmbeddedTargetRef] = useState<string>('')
+
+  const { data: projectsData } = useOrgProjectsInfiniteQuery(
+    { slug: currentOrg?.slug ?? '' },
+    { enabled: !!currentOrg?.slug && (deployMode === 'embedded' || deployMode === 'pocketbase-embedded') }
+  )
+  const allProjects = (projectsData?.pages.flatMap((p) => p?.projects ?? []) ?? []) as SelfHostedProject[]
+
+  const supabaseTargets = allProjects.filter(
+    (p) => p.status === 'ACTIVE_HEALTHY' && (!p.creation_mode || p.creation_mode === 'stack')
+  )
+  const pocketbaseTargets = allProjects.filter(
+    (p) => p.status === 'ACTIVE_HEALTHY' && p.creation_mode === 'pocketbase'
+  )
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -121,13 +159,22 @@ export function SelfHostedProjectCreation() {
         dbPass: '',
         selfHosted: {
           ...(deployMode === 'embedded'
-            ? { creation_mode: 'embedded' }
+            ? {
+                creation_mode: 'embedded',
+                ...(embeddedTargetRef && { embedded_target_ref: embeddedTargetRef }),
+              }
             : deployMode === 'pocketbase'
               ? { creation_mode: 'pocketbase', docker_host }
-              : {
-                  docker_host,
-                  ...(deployMode === 'cluster' && { cluster_mode: true }),
-                }),
+              : deployMode === 'pocketbase-embedded'
+                ? {
+                    creation_mode: 'pocketbase-embedded',
+                    docker_host: embeddedTargetRef ? undefined : docker_host,
+                    ...(embeddedTargetRef && { embedded_target_ref: embeddedTargetRef }),
+                  }
+                : {
+                    docker_host,
+                    ...(deployMode === 'cluster' && { cluster_mode: true }),
+                  }),
         },
       })
     } catch (err) {
@@ -163,6 +210,7 @@ export function SelfHostedProjectCreation() {
     if (isCreating) {
       if (deployMode === 'embedded') return 'Creating database...'
       if (deployMode === 'pocketbase') return 'Launching PocketBase...'
+      if (deployMode === 'pocketbase-embedded') return 'Starting PocketBase container...'
       return 'Launching stack...'
     }
     return 'Create project'
@@ -223,7 +271,12 @@ export function SelfHostedProjectCreation() {
                       key={mode.value}
                       type="button"
                       disabled={isPending || isLocked}
-                      onClick={() => !isLocked && setDeployMode(mode.value)}
+                      onClick={() => {
+                        if (!isLocked) {
+                          setDeployMode(mode.value)
+                          setEmbeddedTargetRef('')
+                        }
+                      }}
                       title={isLocked ? `Requires ${tierLabel} license` : undefined}
                       className={[
                         'flex items-start gap-3 rounded-md border px-3 py-2.5 text-left transition-colors',
@@ -252,7 +305,37 @@ export function SelfHostedProjectCreation() {
               </div>
             </FormItemLayout>
 
-            {deployMode !== 'embedded' && (
+            {(deployMode === 'embedded' || deployMode === 'pocketbase-embedded') && (
+              <FormItemLayout
+                label="Target project"
+                layout="horizontal"
+                description={
+                  deployMode === 'embedded'
+                    ? 'Create the new database inside this existing Supabase project\'s Postgres. Leave blank to use the default instance.'
+                    : 'Share this existing PocketBase project\'s instance. Leave blank to launch a new container.'
+                }
+              >
+                <Select_Shadcn_
+                  value={embeddedTargetRef}
+                  onValueChange={setEmbeddedTargetRef}
+                  disabled={isPending}
+                >
+                  <SelectTrigger_Shadcn_ className="w-full">
+                    <SelectValue_Shadcn_ placeholder="Default / no target" />
+                  </SelectTrigger_Shadcn_>
+                  <SelectContent_Shadcn_>
+                    <SelectItem_Shadcn_ value="">Default / no target</SelectItem_Shadcn_>
+                    {(deployMode === 'embedded' ? supabaseTargets : pocketbaseTargets).map((p) => (
+                      <SelectItem_Shadcn_ key={p.ref} value={p.ref}>
+                        {p.name}
+                      </SelectItem_Shadcn_>
+                    ))}
+                  </SelectContent_Shadcn_>
+                </Select_Shadcn_>
+              </FormItemLayout>
+            )}
+
+            {deployMode !== 'embedded' && deployMode !== 'pocketbase-embedded' && (
               <button
                 type="button"
                 onClick={() => setShowAdvanced((v) => !v)}
@@ -263,7 +346,7 @@ export function SelfHostedProjectCreation() {
               </button>
             )}
 
-            {deployMode !== 'embedded' && showAdvanced && (
+            {deployMode !== 'embedded' && deployMode !== 'pocketbase-embedded' && showAdvanced && (
               <FormField_Shadcn_
                 control={form.control}
                 name="dockerHost"

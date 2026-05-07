@@ -299,9 +299,12 @@ const ProjectsPage: NextPageWithLayout = () => {
                     <TableCell className="font-medium">
                       <span className="flex items-center gap-2">
                         {project.name}
-                        {project.creation_mode === 'pocketbase' && (
+                        {(project.creation_mode === 'pocketbase' ||
+                          project.creation_mode === 'pocketbase-embedded') && (
                           <Badge variant="default" className="text-[10px] px-1.5 py-0.5 font-medium">
-                            PocketBase
+                            {project.creation_mode === 'pocketbase-embedded'
+                              ? 'PocketBase (embedded)'
+                              : 'PocketBase'}
                           </Badge>
                         )}
                       </span>

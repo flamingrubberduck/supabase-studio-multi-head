@@ -20,7 +20,8 @@ export const useGenerateSettingsMenu = () => {
 
   const isProjectActive = project?.status === PROJECT_STATUS.ACTIVE_HEALTHY
 
-  const isPocketBase = (project as { creation_mode?: string } | undefined)?.creation_mode === 'pocketbase'
+  const creationMode = (project as { creation_mode?: string } | undefined)?.creation_mode
+  const isPocketBase = creationMode === 'pocketbase' || creationMode === 'pocketbase-embedded'
 
   if (!IS_PLATFORM) {
     return [

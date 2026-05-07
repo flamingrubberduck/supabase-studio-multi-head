@@ -35,7 +35,8 @@ const ProjectSettings: NextPageWithLayout = () => {
   const router = useRouter()
 
   const { ref: projectRef } = router.query
-  const isPocketBase = (project as any)?.creation_mode === 'pocketbase'
+  const creationMode = (project as any)?.creation_mode as string | undefined
+  const isPocketBase = creationMode === 'pocketbase' || creationMode === 'pocketbase-embedded'
   useEffect(() => {
     if (!IS_PLATFORM && projectRef) {
       const dest = isPocketBase ? 'pocketbase' : 'log-drains'

@@ -9,7 +9,10 @@ import {
   createStoredProject,
   createEmbeddedStoredProject,
   createPocketBaseStoredProject,
+  createEmbeddedPocketBaseStoredProject,
+  createPocketBaseCollectionStoredProject,
   getStoredProjects,
+  getStoredProjectByRef,
   updateProjectFields,
   updateProjectStatus,
   updateStoredProjectField,
@@ -24,7 +27,9 @@ import {
 } from '@/lib/api/self-hosted/orchestrator'
 import {
   createEmbeddedDatabase,
+  createEmbeddedDatabaseInProject,
   embeddedConnectionInfo,
+  embeddedConnectionInfoForProject,
   embeddedDbName,
 } from '@/lib/api/self-hosted/embeddedOrchestrator'
 import {
@@ -33,6 +38,7 @@ import {
   extractPocketBaseHostname,
   generatePocketBaseCredentials,
   launchPocketBaseStack,
+  launchEmbeddedPocketBase,
   waitForPocketBaseHealth,
 } from '@/lib/api/self-hosted/pocketbaseOrchestrator'
 import { provisionReplica } from '@/lib/api/self-hosted/clusterManager'
@@ -95,7 +101,7 @@ const handleGetAll = async (
 }
 
 const handleCreate = async (req: NextApiRequest, res: NextApiResponse) => {
-  const { name, organization_slug, docker_host, cluster_mode, creation_mode } = req.body
+  const { name, organization_slug, docker_host, cluster_mode, creation_mode, embedded_target_ref } = req.body
 
   if (!name?.trim()) {
     return res.status(400).json({ data: null, error: { message: 'Project name is required' } })
@@ -106,7 +112,7 @@ const handleCreate = async (req: NextApiRequest, res: NextApiResponse) => {
     if (!license.ok) return res.status(402).json({ data: null, error: { message: license.message } })
   }
 
-  // ── Embedded mode: create a database inside the existing Postgres instance ──
+  // ── Embedded mode: create a database inside a Postgres instance ─────────────
   if (creation_mode === 'embedded') {
     if (!process.env.PG_META_CRYPTO_KEY) {
       return res.status(400).json({
@@ -120,27 +126,52 @@ const handleCreate = async (req: NextApiRequest, res: NextApiResponse) => {
     }
 
     const ref = crypto.randomBytes(6).toString('hex')
+    const targetRef = embedded_target_ref && typeof embedded_target_ref === 'string'
+      ? embedded_target_ref
+      : null
+
+    // Resolve target project (if provided)
+    let targetProject = targetRef ? getStoredProjectByRef(targetRef) : null
+    if (targetRef && !targetProject) {
+      return res.status(400).json({ data: null, error: { message: `Target project "${targetRef}" not found` } })
+    }
+    if (targetProject && !targetProject.docker_project) {
+      return res.status(400).json({ data: null, error: { message: 'Target project must be a Docker-orchestrated Supabase project' } })
+    }
 
     try {
-      await createEmbeddedDatabase(ref)
+      if (targetProject) {
+        await createEmbeddedDatabaseInProject(ref, targetProject)
+      } else {
+        await createEmbeddedDatabase(ref)
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       return res.status(500).json({ data: null, error: { message: msg } })
     }
 
-    const conn = embeddedConnectionInfo()
+    const conn = targetProject
+      ? embeddedConnectionInfoForProject(targetProject)
+      : { ...embeddedConnectionInfo(),
+          public_url: process.env.SUPABASE_PUBLIC_URL || 'http://localhost:8000',
+          anon_key: process.env.SUPABASE_ANON_KEY || '',
+          service_key: process.env.SUPABASE_SERVICE_KEY || '',
+          jwt_secret: process.env.AUTH_JWT_SECRET || '',
+        }
+
     const project = createEmbeddedStoredProject(ref, {
       name: name.trim(),
       organization_slug: organization_slug ?? 'default-org-slug',
-      public_url: process.env.SUPABASE_PUBLIC_URL || 'http://localhost:8000',
+      public_url: conn.public_url,
       db_host: conn.db_host,
       db_port: conn.db_port,
       db_user: conn.db_user,
       db_name: embeddedDbName(ref),
       db_password: conn.db_password,
-      anon_key: process.env.SUPABASE_ANON_KEY || '',
-      service_key: process.env.SUPABASE_SERVICE_KEY || '',
-      jwt_secret: process.env.AUTH_JWT_SECRET || '',
+      anon_key: conn.anon_key,
+      service_key: conn.service_key,
+      jwt_secret: conn.jwt_secret,
+      ...(targetRef && { embedded_target_ref: targetRef }),
     })
 
     return res.status(201).json({
@@ -190,6 +221,96 @@ const handleCreate = async (req: NextApiRequest, res: NextApiResponse) => {
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : String(err)
         console.error(`[pocketbase] Stack launch failed for ${project.ref}: ${msg}`)
+        updateProjectStatus(project.ref, 'INACTIVE')
+      })
+
+    return res.status(201).json({
+      id: project.id,
+      ref: project.ref,
+      name: project.name,
+      organization_id: project.organization_id,
+      organization_slug: project.organization_slug,
+      cloud_provider: project.cloud_provider,
+      status: 'COMING_UP',
+      region: project.region,
+      inserted_at: project.inserted_at,
+    })
+  }
+
+  // ── PocketBase embedded: collection namespace inside existing PB, or plain docker run ──
+  if (creation_mode === 'pocketbase-embedded') {
+    const ref = crypto.randomBytes(6).toString('hex')
+    const targetRef = embedded_target_ref && typeof embedded_target_ref === 'string'
+      ? embedded_target_ref
+      : null
+
+    // ── Targeted: no Docker — logical namespace inside an existing PocketBase ──
+    if (targetRef) {
+      const targetProject = getStoredProjectByRef(targetRef)
+      if (!targetProject) {
+        return res.status(400).json({ data: null, error: { message: `Target project "${targetRef}" not found` } })
+      }
+      if (targetProject.creation_mode !== 'pocketbase' && targetProject.creation_mode !== 'pocketbase-embedded') {
+        return res.status(400).json({ data: null, error: { message: 'Target project must be a PocketBase project' } })
+      }
+      if (!targetProject.pocketbase_admin_email || !targetProject.pocketbase_admin_password) {
+        return res.status(400).json({ data: null, error: { message: 'Target PocketBase project is missing credentials' } })
+      }
+
+      const collectionPrefix = `${ref}_`
+      const project = createPocketBaseCollectionStoredProject(ref, {
+        name: name.trim(),
+        organization_slug: organization_slug ?? 'default-org-slug',
+        public_url: targetProject.public_url,
+        pocketbase_admin_email: targetProject.pocketbase_admin_email,
+        pocketbase_admin_password: targetProject.pocketbase_admin_password,
+        embedded_target_ref: targetRef,
+        pocketbase_collection_prefix: collectionPrefix,
+      })
+
+      return res.status(201).json({
+        id: project.id,
+        ref: project.ref,
+        name: project.name,
+        organization_id: project.organization_id,
+        organization_slug: project.organization_slug,
+        cloud_provider: project.cloud_provider,
+        status: 'ACTIVE_HEALTHY',
+        region: project.region,
+        inserted_at: project.inserted_at,
+      })
+    }
+
+    // ── Standalone: plain docker run, no Compose stack ────────────────────────
+    const credentials = generatePocketBaseCredentials()
+
+    const storedPbPorts = getStoredProjects()
+      .map((p) => p.pocketbase_port)
+      .filter((p): p is number => p !== undefined)
+    const livePbPorts = discoverPocketBasePorts()
+    const usedPbPorts = [...new Set([...storedPbPorts, ...livePbPorts])]
+    const pocketbasePort = allocatePocketBasePort(usedPbPorts)
+
+    const dockerHostVal = docker_host && typeof docker_host === 'string' ? docker_host : undefined
+    const hostname = extractPocketBaseHostname(dockerHostVal)
+    const publicUrl = `http://${hostname}:${pocketbasePort}`
+
+    const project = createEmbeddedPocketBaseStoredProject(ref, {
+      name: name.trim(),
+      organization_slug: organization_slug ?? 'default-org-slug',
+      public_url: publicUrl,
+      pocketbase_port: pocketbasePort,
+      pocketbase_admin_email: credentials.adminEmail,
+      pocketbase_admin_password: credentials.adminPassword,
+      ...(dockerHostVal && { docker_host: dockerHostVal }),
+    })
+
+    launchEmbeddedPocketBase({ ref, pocketbasePort, credentials, dockerHost: dockerHostVal })
+      .then(() => waitForPocketBaseHealth(publicUrl))
+      .then(() => updateProjectStatus(project.ref, 'ACTIVE_HEALTHY'))
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error(`[pocketbase-embedded] Launch failed for ${project.ref}: ${msg}`)
         updateProjectStatus(project.ref, 'INACTIVE')
       })
 

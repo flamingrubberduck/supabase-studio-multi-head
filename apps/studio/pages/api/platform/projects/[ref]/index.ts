@@ -4,8 +4,14 @@ import apiWrapper from '@/lib/api/apiWrapper'
 import { STUDIO_AUTH_GOTRUE } from '@/lib/constants'
 import { getGoTrueAuthMember } from '@/lib/api/self-hosted/studioGoTrue'
 import { teardownProjectStack } from '@/lib/api/self-hosted/orchestrator'
-import { dropEmbeddedDatabase } from '@/lib/api/self-hosted/embeddedOrchestrator'
-import { teardownPocketBaseStack } from '@/lib/api/self-hosted/pocketbaseOrchestrator'
+import {
+  dropEmbeddedDatabase,
+  dropEmbeddedDatabaseInProject,
+} from '@/lib/api/self-hosted/embeddedOrchestrator'
+import {
+  teardownPocketBaseStack,
+  teardownEmbeddedPocketBase,
+} from '@/lib/api/self-hosted/pocketbaseOrchestrator'
 import { dropReplicationSlot } from '@/lib/api/self-hosted/replicationManager'
 import { deleteStoredProject, getStoredProjectByRef, getStoredProjects, updateProjectFields } from '@/lib/api/self-hosted/projectsStore'
 import { PROJECT_REST_URL } from '@/lib/constants/api'
@@ -127,11 +133,23 @@ const handleDelete = async (req: NextApiRequest, res: NextApiResponse) => {
 
   // Tear down: Docker Compose stack or embedded Postgres database
   if (project.creation_mode === 'embedded') {
-    dropEmbeddedDatabase(ref).catch((err: unknown) => {
-      console.error(
-        `[embedded] DB drop failed for ${ref}: ${err instanceof Error ? err.message : err}`
-      )
-    })
+    if (project.embedded_target_ref) {
+      // DB lives inside another project's Postgres — drop it there
+      const targetProject = allProjects.find((p) => p.ref === project.embedded_target_ref)
+      if (targetProject) {
+        dropEmbeddedDatabaseInProject(ref, targetProject).catch((err: unknown) => {
+          console.error(
+            `[embedded] DB drop in target ${project.embedded_target_ref} failed for ${ref}: ${err instanceof Error ? err.message : err}`
+          )
+        })
+      }
+    } else {
+      dropEmbeddedDatabase(ref).catch((err: unknown) => {
+        console.error(
+          `[embedded] DB drop failed for ${ref}: ${err instanceof Error ? err.message : err}`
+        )
+      })
+    }
   } else if (project.creation_mode === 'pocketbase') {
     try {
       teardownPocketBaseStack(ref, project.docker_host)
@@ -140,6 +158,18 @@ const handleDelete = async (req: NextApiRequest, res: NextApiResponse) => {
         `[pocketbase] Stack teardown failed for ${ref}: ${err instanceof Error ? err.message : err}`
       )
     }
+  } else if (project.creation_mode === 'pocketbase-embedded') {
+    if (!project.embedded_target_ref) {
+      // Has its own Docker container — tear it down
+      try {
+        teardownEmbeddedPocketBase(ref, project.docker_host)
+      } catch (err) {
+        console.error(
+          `[pocketbase-embedded] Teardown failed for ${ref}: ${err instanceof Error ? err.message : err}`
+        )
+      }
+    }
+    // If embedded_target_ref is set, this is a collection namespace — no Docker to clean up
   } else if (project.docker_project) {
     teardownProjectStack(ref, project.docker_project, project.docker_host).catch((err: unknown) => {
       console.error(

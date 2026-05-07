@@ -6,7 +6,7 @@
  *
  * Usage:
  *   smh list
- *   smh create <name>
+ *   smh create <name> [--mode stack|embedded|pocketbase|pocketbase-embedded] [--target <ref>] [--host <docker_host>]
  *   smh rename <ref> <name>
  *   smh delete <ref>
  *   smh start  <ref>
@@ -44,6 +44,10 @@
  *   smh license status
  *   smh license activate <key>
  *   smh license deactivate
+ *
+ *   smh pb-migrate <ref> --direction pb-to-supa|supa-to-pb
+ *     --pb-url <url> --pb-email <email> --pb-password <password>
+ *   smh pb-migrate status <ref> --job <job-id>
  *
  *   smh overlay                          list optional component profiles
  *
@@ -166,14 +170,40 @@ async function cmdList() {
   ])
 }
 
-async function cmdCreate(name) {
-  if (!name) die('Usage: smh create <name>')
-  console.log(`Creating project "${name}"…`)
-  const p = await api('POST', '', { name })
+async function cmdCreate(name, args) {
+  if (!name) die('Usage: smh create <name> [--mode stack|embedded|pocketbase|pocketbase-embedded] [--target <ref>] [--host <docker_host>]')
+
+  const mode       = parseFlag(args, '--mode') ?? 'stack'
+  const targetRef  = parseFlag(args, '--target')
+  const dockerHost = parseFlag(args, '--host')
+
+  const VALID_MODES = ['stack', 'embedded', 'pocketbase', 'pocketbase-embedded']
+  if (!VALID_MODES.includes(mode)) {
+    die(`--mode must be one of: ${VALID_MODES.join(', ')}`)
+  }
+
+  const modeLabel = {
+    stack:                'full Supabase stack',
+    embedded:             targetRef ? `embedded DB inside project ${targetRef}` : 'embedded DB (default Postgres)',
+    pocketbase:           'PocketBase (Docker Compose)',
+    'pocketbase-embedded': targetRef ? `PocketBase collection namespace inside ${targetRef}` : 'PocketBase (docker run)',
+  }[mode]
+
+  console.log(`Creating project "${name}" — mode: ${modeLabel}…`)
+
+  const body = {
+    name,
+    creation_mode: mode === 'stack' ? undefined : mode,
+    ...(targetRef  && { embedded_target_ref: targetRef }),
+    ...(dockerHost && { docker_host: dockerHost }),
+  }
+
+  const p = await api('POST', '', body)
   ok(`Created  ref=${p.ref}  status=${p.status}`)
-  console.log(`  DB port:   ${p.ports.db}`)
-  console.log(`  API port:  ${p.ports.meta}`)
-  console.log(`  Anon key:  ${p.anonKey}`)
+  if (p.public_url)   console.log(`  URL:       ${p.public_url}`)
+  if (p.ports?.db)    console.log(`  DB port:   ${p.ports.db}`)
+  if (p.ports?.meta)  console.log(`  API port:  ${p.ports.meta}`)
+  if (p.anonKey)      console.log(`  Anon key:  ${p.anonKey}`)
 }
 
 async function cmdRename(ref, name) {
@@ -750,6 +780,82 @@ async function cmdBackup(sub, args) {
   process.exit(1)
 }
 
+// ── pb-migrate command ────────────────────────────────────────────────────────
+
+async function cmdPbMigrate(sub, args) {
+  // smh pb-migrate status <ref> --job <job-id>
+  if (sub === 'status') {
+    const ref   = args[0]
+    const jobId = parseFlag(args.slice(1), '--job')
+    if (!ref || !jobId) die('Usage: smh pb-migrate status <ref> --job <job-id>')
+    const { status, data } = await plat('GET', ref, `/pocketbase-migrate?job=${encodeURIComponent(jobId)}`, undefined, { allowNonOk: true })
+    if (!String(status).startsWith('2')) die(data?.error?.message ?? JSON.stringify(data))
+    console.log(`status:  ${data.status}`)
+    console.log(`direction: ${data.direction}`)
+    if (data.logs?.length) {
+      console.log('\nLog:')
+      for (const line of data.logs) console.log(`  ${line}`)
+    }
+    return
+  }
+
+  // smh pb-migrate <ref> --direction pb-to-supa|supa-to-pb --pb-url <url> --pb-email <email> --pb-password <pw>
+  const ref       = sub
+  const direction = parseFlag(args, '--direction')
+  const pbUrl     = parseFlag(args, '--pb-url')
+  const pbEmail   = parseFlag(args, '--pb-email')
+  const pbPass    = parseFlag(args, '--pb-password')
+
+  if (!ref)       die('Usage: smh pb-migrate <ref> --direction pb-to-supa|supa-to-pb --pb-url <url> --pb-email <email> --pb-password <pw>')
+  if (!direction) die('--direction is required: pb-to-supa or supa-to-pb')
+  if (!pbUrl)     die('--pb-url is required (PocketBase public URL, e.g. http://localhost:8090)')
+  if (!pbEmail)   die('--pb-email is required (PocketBase admin email)')
+  if (!pbPass)    die('--pb-password is required (PocketBase admin password)')
+
+  if (direction !== 'pb-to-supa' && direction !== 'supa-to-pb') {
+    die('--direction must be "pb-to-supa" or "supa-to-pb"')
+  }
+
+  console.log(`Starting PocketBase migration for project ${ref}…`)
+  console.log(`  Direction: ${direction}`)
+  console.log(`  PocketBase: ${pbUrl}`)
+  console.log()
+
+  const { status: s0, data: d0 } = await plat(
+    'POST', ref, '/pocketbase-migrate',
+    { direction, pb_url: pbUrl, pb_admin_email: pbEmail, pb_admin_password: pbPass },
+    { allowNonOk: true }
+  )
+  if (!String(s0).startsWith('2')) die(d0?.error?.message ?? d0?.message ?? JSON.stringify(d0))
+
+  const jobId = d0.job_id
+  console.log(`Job started: ${jobId}\n`)
+
+  let logOffset = 0
+  for (;;) {
+    await new Promise(r => setTimeout(r, 2000))
+    const { status: s1, data: job } = await plat(
+      'GET', ref, `/pocketbase-migrate?job=${encodeURIComponent(jobId)}`,
+      undefined, { allowNonOk: true }
+    )
+    if (!String(s1).startsWith('2')) die(job?.error?.message ?? JSON.stringify(job))
+
+    const newLines = (job.logs ?? []).slice(logOffset)
+    for (const line of newLines) console.log(`  ${line}`)
+    logOffset += newLines.length
+
+    if (job.status === 'done') {
+      console.log()
+      ok('Migration completed successfully.')
+      break
+    }
+    if (job.status === 'error') {
+      console.log()
+      die('Migration failed — see log above.')
+    }
+  }
+}
+
 // ── overlay command ───────────────────────────────────────────────────────────
 
 const OPTIONAL_PROFILES = [
@@ -811,14 +917,21 @@ function usage() {
 \x1b[1msmh\x1b[0m — Supabase Multi-Head CLI
 
 \x1b[1mProject management:\x1b[0m
-  smh list                             list all projects
-  smh create <name>                    create a new project
-  smh rename <ref> <name>              rename a project
-  smh delete <ref>                     delete a project and its containers
-  smh start  <ref>                     start a stopped project
-  smh stop   <ref>                     stop a running project
-  smh status <ref>                     show registry details for a project
-  smh health [ref]                     show live container health
+  smh list                              list all projects
+  smh create <name>                     create a full Supabase stack (default)
+    [--mode stack]                      full Docker Compose stack (default)
+    [--mode embedded]                   new Postgres DB inside default instance
+    [--mode embedded --target <ref>]    new Postgres DB inside a specific project's Postgres
+    [--mode pocketbase]                 PocketBase via Docker Compose
+    [--mode pocketbase-embedded]        PocketBase via plain docker run
+    [--mode pocketbase-embedded --target <ref>]  PocketBase collection namespace inside existing PB
+    [--host <docker_host>]              remote Docker daemon (ssh:// or tcp://)
+  smh rename <ref> <name>               rename a project
+  smh delete <ref>                      delete a project and its containers
+  smh start  <ref>                      start a stopped project
+  smh stop   <ref>                      stop a running project
+  smh status <ref>                      show registry details for a project
+  smh health [ref]                      show live container health
 
 \x1b[1mOrganization management:\x1b[0m
   smh org list                         list all organizations
@@ -867,6 +980,13 @@ function usage() {
   smh license activate <key>           activate a license key
   smh license deactivate               revert to free tier
 
+\x1b[1mPocketBase migration:\x1b[0m
+  smh pb-migrate <ref> --direction pb-to-supa|supa-to-pb
+    --pb-url <url>            PocketBase public URL (e.g. http://localhost:8090)
+    --pb-email <email>        PocketBase admin email
+    --pb-password <password>  PocketBase admin password
+  smh pb-migrate status <ref> --job <job-id>   poll a running migration job
+
 \x1b[1mOptional components (docker-compose.minimal.yml):\x1b[0m
   smh overlay                          list profiles and print compose command (core only)
   smh overlay <profile>...             list profiles with selected ones enabled + print command
@@ -886,7 +1006,7 @@ const [,, cmd, sub, ...rest] = process.argv
 
 switch (cmd) {
   case 'list':             await cmdList();                break
-  case 'create':           await cmdCreate(sub);           break
+  case 'create':           await cmdCreate(sub, rest);     break
   case 'rename':           await cmdRename(sub, rest[0]);  break
   case 'delete':           await cmdDelete(sub);           break
   case 'start':            await cmdStart(sub);            break
@@ -899,6 +1019,7 @@ switch (cmd) {
   case 'storage':          await cmdStorage(sub);          break
   case 'backup':           await cmdBackup(sub, rest);     break
   case 'migrate':          await cmdMigrate(sub, rest);    break
+  case 'pb-migrate':       await cmdPbMigrate(sub, rest);  break
   case 'overlay':          await cmdOverlay(sub ? [sub, ...rest] : []); break
 
   case 'migrations':
