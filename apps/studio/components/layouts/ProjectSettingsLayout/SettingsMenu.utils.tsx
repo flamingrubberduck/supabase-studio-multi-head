@@ -45,6 +45,12 @@ export const useGenerateSettingsMenu = () => {
               ]
             : [
                 {
+                  name: 'Database',
+                  key: 'database',
+                  url: `/project/${ref}/settings/database`,
+                  items: [] as [],
+                },
+                {
                   name: 'Backups',
                   key: 'backups',
                   url: `/project/${ref}/settings/backups`,
