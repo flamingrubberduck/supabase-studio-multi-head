@@ -15,7 +15,7 @@ catalog:
   '@types/react-dom': ^18.3.0
   lodash: ^4.18.1
   lodash-es: ^4.18.1
-  next: ~16.1.7
+  next: ~16.2.3
   react: ^18.3.0
   react-dom: ^18.3.0
   recharts: ^2.15.4
@@ -52,6 +52,20 @@ minimumReleaseAgeExclude:
   - hono
   - lodash
   - lodash-es
+  - protobufjs
+  - simple-git
+  - '@vitejs/plugin-rsc'
+  - srvx
+  - h3
+  - unhead
+  - follow-redirects
+  - nitropack
+  - socks-proxy-agent
+  - express-rate-limit
+  - uuid
+  - postcss
+  - fast-xml-parser
+  - fast-xml-builder
 
 onlyBuiltDependencies:
   - node-pty
@@ -59,14 +73,14 @@ onlyBuiltDependencies:
 
 overrides:
   '@ardatan/relay-compiler>immutable': ^3.8.3
-  '@aws-sdk/core>fast-xml-parser': ^4.5.5
+  fast-xml-parser: ^5.7.3
   '@mapbox/node-pre-gyp>tar': ^7.5.11
   '@redocly/respect-core>form-data': ^4.0.4
   '@redocly/respect-core>js-yaml': ^4.1.1
   '@rollup/plugin-terser>serialize-javascript': ^7.0.5
   '@tanstack/start-server-core': ^1.159.0
   cacache>tar: ^7.5.11
-  dompurify: ^3.3.2
+  dompurify: ^3.4.2
   esbuild: ^0.25.2
   lodash: 'catalog:'
   lodash-es: 'catalog:'
@@ -79,6 +93,21 @@ overrides:
   'terser-webpack-plugin>serialize-javascript': ^7.0.5
   tmp: ^0.2.4
   webpack: ^5.104.1
+  # Security vulnerability fixes
+  '@vitejs/plugin-rsc': ^0.5.23
+  axios: ^1.15.2
+  express-rate-limit: ^8.5.1
+  follow-redirects: ^1.16.0
+  h3: '>=2.0.1-rc.17'
+  hono: ^4.12.18
+  nitropack: ^2.13.4
+  postcss: ^8.5.10
+  protobufjs: ^7.5.6
+  simple-git: ^3.36.0
+  socks-proxy-agent: ^8.0.5
+  srvx: ^0.11.13
+  unhead: ^2.1.13
+  uuid: ^11.1.1
 
 patchedDependencies:
   react-data-grid: patches/react-data-grid.patch
