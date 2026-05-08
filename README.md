@@ -25,6 +25,7 @@ Built on top of [Supabase Studio](https://github.com/supabase/supabase/tree/mast
 | **Read replicas** | Add streaming replicas to any project [Business] |
 | **Warm standby** | Automatic failover with a hot standby [Business] |
 | **Cluster mode** | Multi-node read scaling [Enterprise] |
+| **Authelia 2FA/SSO** | Optional two-factor authentication in front of the nginx proxy |
 
 ## Database Backups
 

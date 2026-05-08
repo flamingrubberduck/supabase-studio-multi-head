@@ -1,0 +1,48 @@
+# Authelia SSO/2FA overlay for Supabase self-hosted.
+#
+# Usage (with nginx):
+#   docker compose -f docker-compose.yml -f docker-compose.nginx-authelia.yml -f docker-compose.authelia.yml up -d
+#
+# Required additions to .env:
+#   AUTHELIA_JWT_SECRET            - random secret (openssl rand -hex 32)
+#   AUTHELIA_SESSION_SECRET        - random secret (openssl rand -hex 32)
+#   AUTHELIA_STORAGE_ENCRYPTION_KEY - random 64-char hex (openssl rand -hex 32)
+#   AUTHELIA_SCHEMA                - postgres schema name (default: authelia)
+#   PROXY_DOMAIN                   - your domain (e.g. supabase.example.com)
+#
+# After first start, create users:
+#   docker exec supabase-authelia authelia crypto hash generate bcrypt --password yourpassword
+# Then add users to ./volumes/authelia/users_database.yml
+#
+# See: https://www.authelia.com/integration/prologue/get-started/
+
+name: supabase
+
+services:
+  authelia:
+    container_name: supabase-authelia
+    image: authelia/authelia:4
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET: ${AUTHELIA_JWT_SECRET}
+      AUTHELIA_SESSION_SECRET: ${AUTHELIA_SESSION_SECRET}
+      AUTHELIA_STORAGE_ENCRYPTION_KEY: ${AUTHELIA_STORAGE_ENCRYPTION_KEY}
+      AUTHELIA_STORAGE_POSTGRES_ADDRESS: db:${POSTGRES_PORT:-5432}
+      AUTHELIA_STORAGE_POSTGRES_DATABASE: ${POSTGRES_DB}
+      AUTHELIA_STORAGE_POSTGRES_SCHEMA: ${AUTHELIA_SCHEMA:-authelia}
+      AUTHELIA_STORAGE_POSTGRES_USERNAME: supabase_admin
+      AUTHELIA_STORAGE_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      AUTHELIA_SCHEMA: ${AUTHELIA_SCHEMA:-authelia}
+    volumes:
+      - ./volumes/authelia:/config
+    expose:
+      - 9091
+
+  db:
+    environment:
+      AUTHELIA_SCHEMA: ${AUTHELIA_SCHEMA:-authelia}
+    volumes:
+      - ./volumes/db/schema-authelia.sh:/docker-entrypoint-initdb.d/init-scripts/95-schema-authelia.sh:Z

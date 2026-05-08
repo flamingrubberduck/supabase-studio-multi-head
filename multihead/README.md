@@ -33,13 +33,20 @@ multihead/
     └── generate-keys.sh        # Generate JWT secret and API keys
 
 docker/                         # Base Supabase stack (used by multihead/docker-compose.yml)
-├── docker-compose.yml          # Full stack — all services always-on
-├── docker-compose.minimal.yml  # Overlay — makes optional services opt-in via profiles
+├── docker-compose.yml              # Full stack — all services always-on
+├── docker-compose.minimal.yml      # Overlay — makes optional services opt-in via profiles
 ├── docker-compose.multihead.yml
-├── docker-compose.overlay.yml  # (legacy location — prefer multihead/ copy)
-├── docker-compose.s3.yml       # S3 storage backend
-├── docker-compose.nginx.yml    # Nginx + Certbot TLS
-└── docker-compose.caddy.yml    # Caddy TLS
+├── docker-compose.overlay.yml      # (legacy location — prefer multihead/ copy)
+├── docker-compose.s3.yml           # S3 storage backend
+├── docker-compose.nginx.yml        # Nginx + Certbot TLS
+├── docker-compose.caddy.yml        # Caddy TLS
+├── docker-compose.authelia.yml     # Authelia 2FA/SSO service overlay
+├── docker-compose.nginx-authelia.yml  # Nginx with Authelia auth_request (use instead of nginx.yml)
+└── volumes/
+    ├── authelia/configuration.yml  # Authelia config (edit domain before use)
+    ├── nginx/snippets/             # Modular nginx snippets for Authelia integration
+    ├── caddy/snippets/cors.conf    # Reusable Caddy CORS snippet
+    └── db/schema-authelia.sh       # Creates Authelia schema in Postgres on DB init
 ```
 
 ---
@@ -363,6 +370,42 @@ smh cluster-failover <ref>   # promote highest-rank healthy replica to master  [
 
 ---
 
+## Authelia (2FA/SSO for the nginx proxy)
+
+Adds two-factor authentication in front of the Studio dashboard via [Authelia](https://www.authelia.com/). Only applicable when using the nginx proxy overlay.
+
+**1. Add to `.env`:**
+
+```dotenv
+AUTHELIA_JWT_SECRET=<openssl rand -hex 32>
+AUTHELIA_SESSION_SECRET=<openssl rand -hex 32>
+AUTHELIA_STORAGE_ENCRYPTION_KEY=<openssl rand -hex 32>
+AUTHELIA_SCHEMA=authelia
+```
+
+**2. Edit `docker/volumes/authelia/configuration.yml`** — replace `supabase.example.com` and `example.com` with your domain.
+
+**3. Start with Authelia overlay** (use `nginx-authelia` instead of `nginx`):
+
+```bash
+docker compose \
+  -f docker/docker-compose.yml \
+  -f docker/docker-compose.nginx-authelia.yml \
+  -f docker/docker-compose.authelia.yml \
+  up -d
+```
+
+**4. Create the Authelia users file:**
+
+```bash
+docker exec supabase-authelia authelia crypto hash generate bcrypt --password yourpassword
+# then create docker/volumes/authelia/users_database.yml with the hash
+```
+
+See `docker/README.md` for the full users file format.
+
+---
+
 ## GoTrue auth (Studio login)
 
 By default Studio runs without user authentication (bypassed for self-hosted). To enable real login via the stack's GoTrue service, set:
@@ -595,6 +638,18 @@ MULTI_HEAD_IMAGE=ghcr.io/<your-username>/supabase-studio-multi-head:latest
 ---
 
 ## Running tests
+
+### Integration tests (deployment smoke test)
+
+The `test/` directory contains a Vitest suite that tests a live deployment end-to-end: PostgREST CRUD, file storage, S3 signed URLs, Realtime subscriptions, and Edge Functions — across all four API key types.
+
+```bash
+cd test
+npm install
+npm test
+```
+
+Reads credentials from `../docker/.env` automatically. Requires a running deployment with `SUPABASE_PUBLIC_URL` reachable.
 
 ### Unit tests (Vitest)
 

@@ -50,6 +50,13 @@
  *   smh pb-migrate status <ref> --job <job-id>
  *
  *   smh overlay                          list optional component profiles
+ *   smh overlay <profile>...             list with selected profiles enabled
+ *   smh overlay <profile>... --run       execute the generated compose command
+ *
+ *   smh proxy                            show available proxy / auth overlays
+ *   smh proxy nginx                      print compose command for Nginx + Certbot
+ *   smh proxy caddy                      print compose command for Caddy
+ *   smh proxy nginx-authelia             print compose command for Nginx + Authelia 2FA
  *
  * Environment:
  *   STUDIO_URL          Base URL of Studio (default: http://localhost:8000)
@@ -910,6 +917,46 @@ async function cmdOverlay(args) {
   }
 }
 
+// ── proxy command ────────────────────────────────────────────────────────────
+
+const PROXY_OVERLAYS = [
+  {
+    name: 'nginx',
+    desc: 'Nginx + Certbot — TLS with Let\'s Encrypt, basic-auth on Studio',
+    command: 'docker compose -f docker-compose.yml -f docker-compose.nginx.yml up -d',
+  },
+  {
+    name: 'caddy',
+    desc: 'Caddy — automatic TLS, basic-auth on Studio',
+    command: 'docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d',
+  },
+  {
+    name: 'nginx-authelia',
+    desc: 'Nginx + Authelia — TLS with Let\'s Encrypt + 2FA/SSO (replaces nginx)',
+    command: 'docker compose -f docker-compose.yml -f docker-compose.nginx-authelia.yml -f docker-compose.authelia.yml up -d',
+    note: 'Requires AUTHELIA_JWT_SECRET, AUTHELIA_SESSION_SECRET, AUTHELIA_STORAGE_ENCRYPTION_KEY in .env\n  Edit volumes/authelia/configuration.yml with your domain before first start.',
+  },
+]
+
+async function cmdProxy(selected) {
+  if (!selected) {
+    console.log(`\x1b[1mProxy / auth overlays\x1b[0m\n`)
+    for (const p of PROXY_OVERLAYS) {
+      console.log(`  \x1b[36m${p.name.padEnd(20)}\x1b[0m ${p.desc}`)
+    }
+    console.log(`\nUsage: smh proxy <name>    (prints the compose command)`)
+    return
+  }
+
+  const overlay = PROXY_OVERLAYS.find(p => p.name === selected)
+  if (!overlay) die(`Unknown proxy overlay: ${selected}\nValid: ${PROXY_OVERLAYS.map(p => p.name).join(', ')}`)
+
+  console.log(`\x1b[1m${overlay.name}\x1b[0m — ${overlay.desc}\n`)
+  if (overlay.note) console.log(`\x1b[33mNote:\x1b[0m ${overlay.note}\n`)
+  console.log(`\x1b[1mCompose command:\x1b[0m\n`)
+  console.log(overlay.command)
+}
+
 // ── usage ─────────────────────────────────────────────────────────────────────
 
 function usage() {
@@ -993,6 +1040,12 @@ function usage() {
   smh overlay <profile>... --run       also execute the compose command
   Profiles: realtime  storage  edge-functions  pooler  analytics
 
+\x1b[1mProxy / auth overlays:\x1b[0m
+  smh proxy                            list available proxy overlays
+  smh proxy nginx                      Nginx + Certbot (TLS + basic-auth)
+  smh proxy caddy                      Caddy (automatic TLS + basic-auth)
+  smh proxy nginx-authelia             Nginx + Authelia (TLS + 2FA/SSO)
+
 \x1b[1mEnvironment:\x1b[0m
   STUDIO_URL          Studio base URL  (default: http://localhost:8000)
   DASHBOARD_USERNAME  Basic auth username
@@ -1021,6 +1074,7 @@ switch (cmd) {
   case 'migrate':          await cmdMigrate(sub, rest);    break
   case 'pb-migrate':       await cmdPbMigrate(sub, rest);  break
   case 'overlay':          await cmdOverlay(sub ? [sub, ...rest] : []); break
+  case 'proxy':            await cmdProxy(sub); break
 
   case 'migrations':
     if (!sub || sub === 'compare') await cmdMigrationsCompare()

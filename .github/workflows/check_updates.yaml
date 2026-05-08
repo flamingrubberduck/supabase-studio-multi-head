@@ -1,0 +1,25 @@
+# https://github.com/patrickloeber/python-github-action-template/tree/main
+name: Check for supabase docker updates
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: 0 5 * * 2 # https://crontab.guru/#0_5_*_*_2
+
+jobs:
+  check-updates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: setup python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: .github/scripts/.python-version
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: execute py script
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: cd .github/scripts && uv run check_updates.py

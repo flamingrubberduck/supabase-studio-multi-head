@@ -321,6 +321,11 @@
         <p>Bi-directional data migration between PocketBase and Supabase. Move collections to tables or tables to collections — from the UI or CLI.</p>
       </div>
       <div class="feature-card">
+        <div class="feature-icon">🔐</div>
+        <h3>Authelia 2FA / SSO</h3>
+        <p>Optional two-factor authentication and single sign-on in front of Studio via Authelia — one overlay file, no code changes.</p>
+      </div>
+      <div class="feature-card">
         <div class="feature-icon">⚡</div>
         <h3>Standby &amp; failover <span style="font-size:11px;color:var(--green);font-weight:600;">BUSINESS</span></h3>
         <p>Provision warm standbys and trigger failover with one click. WAL streaming replication included.</p>
@@ -396,7 +401,10 @@ docker compose \
   up -d
 
 <span class="comment"># Print the right command for your selection</span>
-smh overlay storage realtime</pre>
+smh overlay storage realtime
+
+<span class="comment"># Add Nginx + Authelia 2FA (replaces plain nginx)</span>
+smh proxy nginx-authelia</pre>
     </div>
   </div>
 </section>
@@ -715,6 +723,12 @@ cd multihead &amp;&amp; bash start.sh</pre>
             <td class="no">Vendor hosted</td>
             <td class="yes">✓</td>
             <td class="yes">✓</td>
+          </tr>
+          <tr>
+            <td>2FA / SSO (Authelia)</td>
+            <td class="no">✗</td>
+            <td class="no">✗ manual setup</td>
+            <td class="yes">✓ overlay</td>
           </tr>
           <tr>
             <td>Monthly cost</td>
